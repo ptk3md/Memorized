@@ -350,6 +350,7 @@
     }
 
     // ---------- tela de input ----------
+    textInput.addEventListener('input', updateSentenceCounter);
     btnNewText.addEventListener('click', () => {
         isEditing = false;
         currentTextId = null;
