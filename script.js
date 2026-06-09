@@ -1,5 +1,6 @@
 (function() {
     // ---------- elementos DOM ----------
+    const screenLibrary = document.getElementById('screen-library');
     const screenInput = document.getElementById('screen-input');
     const screenMethod = document.getElementById('screen-method');
     const screenPlay = document.getElementById('screen-play');
@@ -8,11 +9,15 @@
     const fulltextModal = document.getElementById('fulltext-modal');
     const toast = document.getElementById('toast');
 
+    const textList = document.getElementById('text-list');
+    const emptyLibrary = document.getElementById('empty-library');
+    const btnNewText = document.getElementById('btn-new-text');
     const textInput = document.getElementById('text-input');
     const sentenceCounter = document.getElementById('sentence-counter');
     const sentencePreview = document.getElementById('sentence-preview');
     const warningFew = document.getElementById('warning-few-sentences');
     const btnStart = document.getElementById('btn-start');
+    const btnBackLibrary = document.getElementById('btn-back-library');
     const btnResetStorage = document.getElementById('btn-reset-storage');
 
     const methodOptions = document.querySelectorAll('.method-option');
@@ -34,20 +39,23 @@
 
     const completeSummary = document.getElementById('complete-summary');
     const btnRestart = document.getElementById('btn-restart');
+    const btnBackLibraryComplete = document.getElementById('btn-back-library-complete');
     const resumeYes = document.getElementById('resume-yes');
     const resumeNo = document.getElementById('resume-no');
 
     // ---------- estado da aplicação ----------
     let sentences = [];
-    let method = null; // 'block' | 'serial' | 'sliding'
+    let method = null;
     let originalText = '';
     let originalTextHash = '';
     let currentLevel = 0;
-    let currentIndexWithinLevel = 0; // usado apenas no serial
+    let currentIndexWithinLevel = 0;
     let selectedMethod = null;
+    let currentTextId = null;   // ID do texto ativo na biblioteca
+    let isEditing = false;      // se estamos editando um texto existente
 
-    const STORAGE_KEY = 'memorizador-progress';
-    const WINDOW_SIZE = 4; // tamanho da janela deslizante
+    const STORAGE_KEY = 'memorizador-texts';
+    const WINDOW_SIZE = 4;
 
     // ---------- utilidades ----------
     function showToast(msg) {
@@ -59,6 +67,10 @@
         toast._timeout = setTimeout(() => {
             toast.classList.add('hidden');
         }, 2000);
+    }
+
+    function generateId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
     }
 
     function generateTextHash(text) {
@@ -141,44 +153,124 @@
         }
     }
 
-    // ---------- persistência ----------
-    function saveProgress() {
-        if (!method || !sentences.length) return;
-        const data = {
-            text: originalText,
-            hash: originalTextHash,
+    // ---------- persistência da biblioteca ----------
+    function loadAllTexts() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    }
+
+    function saveAllTexts(texts) {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(texts));
+        } catch (e) {
+            showToast('⚠️ Não foi possível salvar. Espaço insuficiente.');
+        }
+    }
+
+    function findTextById(id) {
+        const texts = loadAllTexts();
+        return texts.find(t => t.id === id);
+    }
+
+    function updateTextInLibrary(id, updates) {
+        const texts = loadAllTexts();
+        const index = texts.findIndex(t => t.id === id);
+        if (index !== -1) {
+            texts[index] = { ...texts[index], ...updates };
+            saveAllTexts(texts);
+        }
+    }
+
+    function deleteTextFromLibrary(id) {
+        let texts = loadAllTexts();
+        texts = texts.filter(t => t.id !== id);
+        saveAllTexts(texts);
+    }
+
+    function saveProgressForCurrentText() {
+        if (!currentTextId || !method) return;
+        const progress = {
             method,
             currentLevel,
             currentIndexWithinLevel: method === 'serial' ? currentIndexWithinLevel : 0
         };
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        } catch (e) {
-            showToast('⚠️ Não foi possível salvar o progresso. Espaço insuficiente.');
-            console.warn('localStorage setItem falhou:', e);
+        updateTextInLibrary(currentTextId, { progress });
+    }
+
+    function clearProgressForCurrentText() {
+        if (!currentTextId) return;
+        updateTextInLibrary(currentTextId, { progress: null });
+    }
+
+    // ---------- renderização da biblioteca ----------
+    function renderLibrary() {
+        const texts = loadAllTexts();
+        textList.innerHTML = '';
+        if (texts.length === 0) {
+            emptyLibrary.classList.remove('hidden');
+            textList.classList.add('hidden');
+        } else {
+            emptyLibrary.classList.add('hidden');
+            textList.classList.remove('hidden');
+            texts.forEach(text => {
+                const div = document.createElement('div');
+                div.className = 'text-item';
+                div.innerHTML = `
+                    <div class="title">${escapeHtml(text.title)}</div>
+                    <div class="preview">${escapeHtml(text.content.slice(0, 100))}</div>
+                    <div class="actions">
+                        <button class="train-btn" data-id="${text.id}">Treinar</button>
+                        <button class="edit-btn" data-id="${text.id}">Editar</button>
+                        <button class="delete-btn" data-id="${text.id}">Apagar</button>
+                    </div>
+                `;
+                textList.appendChild(div);
+            });
+
+            // Event listeners para os botões da biblioteca
+            document.querySelectorAll('.train-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.dataset.id;
+                    startTraining(id);
+                });
+            });
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.dataset.id;
+                    editText(id);
+                });
+            });
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.dataset.id;
+                    if (confirm('Tem certeza que deseja apagar este texto e seu progresso?')) {
+                        deleteTextFromLibrary(id);
+                        renderLibrary();
+                        showToast('Texto removido.');
+                    }
+                });
+            });
         }
     }
 
-    function clearProgress() {
-        try {
-            localStorage.removeItem(STORAGE_KEY);
-        } catch (e) {
-            console.warn('localStorage removeItem falhou:', e);
-        }
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
     }
 
-    function loadProgress() {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) return null;
-            return JSON.parse(raw);
-        } catch {
-            return null;
-        }
-    }
-
-    // ---------- troca de telas ----------
+    // ---------- fluxo de telas ----------
     function showScreen(screen) {
+        screenLibrary.classList.add('hidden');
         screenInput.classList.add('hidden');
         screenMethod.classList.add('hidden');
         screenPlay.classList.add('hidden');
@@ -187,24 +279,165 @@
         lucide.createIcons();
     }
 
-    // ---------- confetes ----------
-    function spawnConfetti() {
-        const colors = ['#d97757', '#e6b89c', '#f5c6a0', '#f28b82', '#fbbc04', '#aecbfa', '#ff8a65'];
-        for (let i = 0; i < 60; i++) {
-            const piece = document.createElement('div');
-            piece.className = 'confetti-piece';
-            piece.style.left = Math.random() * 100 + '%';
-            piece.style.animationDelay = Math.random() * 2 + 's';
-            piece.style.animationDuration = (Math.random() * 2 + 2) + 's';
-            piece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-            piece.style.width = (Math.random() * 8 + 6) + 'px';
-            piece.style.height = (Math.random() * 8 + 6) + 'px';
-            document.body.appendChild(piece);
-            setTimeout(() => piece.remove(), 4000);
+    // ---------- ações da biblioteca ----------
+    function startTraining(id) {
+        const text = findTextById(id);
+        if (!text) return;
+        sentences = parseSentences(text.content);
+        if (sentences.length < 2) {
+            showToast('Este texto não tem frases suficientes para treinar.');
+            return;
+        }
+        currentTextId = id;
+        originalText = text.content;
+        originalTextHash = generateTextHash(originalText);
+        textInput.value = originalText;
+
+        // Verifica se há progresso salvo
+        if (text.progress) {
+            // Mostra modal de retomada
+            resumeModal.classList.remove('hidden');
+            trapFocus(resumeModal);
+            resumeYes.focus();
+            // Configura listeners do modal (serão removidos após uso)
+            resumeYes.onclick = () => {
+                resumeYes.onclick = null;
+                resumeNo.onclick = null;
+                removeTrap(resumeModal);
+                resumeModal.classList.add('hidden');
+                method = text.progress.method;
+                currentLevel = text.progress.currentLevel;
+                currentIndexWithinLevel = text.progress.method === 'serial' ? (text.progress.currentIndexWithinLevel || 0) : 0;
+                showScreen(screenPlay);
+                renderCard();
+            };
+            resumeNo.onclick = () => {
+                resumeYes.onclick = null;
+                resumeNo.onclick = null;
+                removeTrap(resumeModal);
+                resumeModal.classList.add('hidden');
+                // Zera progresso e vai para escolha de método
+                clearProgressForCurrentText();
+                goToMethodSelection();
+            };
+            resumeModal.addEventListener('click', (e) => {
+                if (e.target === resumeModal) resumeNo.click();
+            });
+        } else {
+            // Sem progresso, vai direto para escolha de método
+            goToMethodSelection();
         }
     }
 
-    // ---------- renderização dos modos ----------
+    function goToMethodSelection() {
+        method = null;
+        currentLevel = 0;
+        currentIndexWithinLevel = 0;
+        selectedMethod = null;
+        methodOptions.forEach(btn => btn.classList.remove('selected'));
+        btnConfirmMethod.disabled = true;
+        showScreen(screenMethod);
+    }
+
+    function editText(id) {
+        const text = findTextById(id);
+        if (!text) return;
+        isEditing = true;
+        currentTextId = id;
+        textInput.value = text.content;
+        updateSentenceCounter();
+        showScreen(screenInput);
+    }
+
+    // ---------- tela de input ----------
+    btnNewText.addEventListener('click', () => {
+        isEditing = false;
+        currentTextId = null;
+        textInput.value = '';
+        updateSentenceCounter();
+        showScreen(screenInput);
+    });
+
+    btnBackLibrary.addEventListener('click', () => {
+        showScreen(screenLibrary);
+        renderLibrary();
+    });
+
+    btnStart.addEventListener('click', () => {
+        const s = parseSentences(textInput.value);
+        if (s.length < 2) {
+            showToast('Mínimo de 2 frases necessário.');
+            return;
+        }
+        sentences = s;
+        originalText = textInput.value;
+        originalTextHash = generateTextHash(originalText);
+
+        // Solicita título
+        let title = prompt('Dê um título para este texto (opcional):');
+        if (!title || title.trim() === '') {
+            title = originalText.slice(0, 50).replace(/\s+/g, ' ').trim() + (originalText.length > 50 ? '…' : '');
+        }
+
+        if (isEditing && currentTextId) {
+            // Atualiza texto existente e reseta progresso
+            updateTextInLibrary(currentTextId, {
+                title,
+                content: originalText,
+                progress: null
+            });
+            showToast('Texto atualizado!');
+        } else {
+            // Novo texto
+            const newId = generateId();
+            currentTextId = newId;
+            const texts = loadAllTexts();
+            texts.push({
+                id: newId,
+                title,
+                content: originalText,
+                progress: null
+            });
+            saveAllTexts(texts);
+            showToast('Texto salvo!');
+        }
+
+        // Vai para escolha de método
+        goToMethodSelection();
+        lucide.createIcons();
+    });
+
+    btnResetStorage.addEventListener('click', () => {
+        if (confirm('Isso apagará TODOS os textos e progressos salvos. Continuar?')) {
+            localStorage.removeItem(STORAGE_KEY);
+            renderLibrary();
+            showToast('Todos os dados foram apagados.');
+        }
+    });
+
+    // ---------- seleção de método ----------
+    methodOptions.forEach(btn => {
+        btn.addEventListener('click', () => {
+            methodOptions.forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            selectedMethod = btn.dataset.method;
+            btnConfirmMethod.disabled = false;
+        });
+    });
+
+    btnConfirmMethod.addEventListener('click', () => {
+        if (!selectedMethod) return;
+        method = selectedMethod;
+        currentLevel = 0;
+        currentIndexWithinLevel = 0;
+        // Salva progresso inicial
+        saveProgressForCurrentText();
+        showScreen(screenPlay);
+        renderCard();
+        lucide.createIcons();
+    });
+
+    // ---------- renderização dos modos (igual ao anterior) ----------
     function renderBlockMode() {
         let html = '';
         for (let i = 0; i <= currentLevel; i++) {
@@ -285,44 +518,44 @@
         }
     }
 
-    // ---------- navegação ----------
+    // ---------- navegação (igual) ----------
     function handleNext() {
         if (method === 'block') {
             if (currentLevel < sentences.length - 1) {
                 currentLevel++;
-                saveProgress();
+                saveProgressForCurrentText();
                 renderCard();
                 showToast(`Nível ${currentLevel+1} concluído!`);
             } else {
-                clearProgress();
+                clearProgressForCurrentText();
                 showCompleteScreen();
             }
         } else if (method === 'serial') {
             if (currentIndexWithinLevel < currentLevel) {
                 currentIndexWithinLevel++;
-                saveProgress();
+                saveProgressForCurrentText();
                 renderCard();
             } else {
                 if (currentLevel < sentences.length - 1) {
                     showToast(`Nível ${currentLevel+1} concluído!`);
                     currentLevel++;
                     currentIndexWithinLevel = 0;
-                    saveProgress();
+                    saveProgressForCurrentText();
                     renderCard();
                     setTimeout(() => showToast(`Nível ${currentLevel+1} iniciado!`), 600);
                 } else {
-                    clearProgress();
+                    clearProgressForCurrentText();
                     showCompleteScreen();
                 }
             }
         } else if (method === 'sliding') {
             if (currentLevel < sentences.length - 1) {
                 currentLevel++;
-                saveProgress();
+                saveProgressForCurrentText();
                 renderCard();
                 showToast(`Nível ${currentLevel+1} concluído!`);
             } else {
-                clearProgress();
+                clearProgressForCurrentText();
                 showCompleteScreen();
             }
         }
@@ -332,24 +565,24 @@
         if (method === 'block') {
             if (currentLevel > 0) {
                 currentLevel--;
-                saveProgress();
+                saveProgressForCurrentText();
                 renderCard();
             }
         } else if (method === 'serial') {
             if (currentIndexWithinLevel > 0) {
                 currentIndexWithinLevel--;
-                saveProgress();
+                saveProgressForCurrentText();
                 renderCard();
             } else if (currentLevel > 0) {
                 currentLevel--;
                 currentIndexWithinLevel = currentLevel;
-                saveProgress();
+                saveProgressForCurrentText();
                 renderCard();
             }
         } else if (method === 'sliding') {
             if (currentLevel > 0) {
                 currentLevel--;
-                saveProgress();
+                saveProgressForCurrentText();
                 renderCard();
             }
         }
@@ -365,9 +598,24 @@
     function resetTrainingState() {
         currentLevel = 0;
         currentIndexWithinLevel = 0;
-        if (method && sentences.length) {
-            saveProgress();
-            renderCard();
+        saveProgressForCurrentText();
+        renderCard();
+    }
+
+    // ---------- confetes (igual) ----------
+    function spawnConfetti() {
+        const colors = ['#d97757', '#e6b89c', '#f5c6a0', '#f28b82', '#fbbc04', '#aecbfa', '#ff8a65'];
+        for (let i = 0; i < 60; i++) {
+            const piece = document.createElement('div');
+            piece.className = 'confetti-piece';
+            piece.style.left = Math.random() * 100 + '%';
+            piece.style.animationDelay = Math.random() * 2 + 's';
+            piece.style.animationDuration = (Math.random() * 2 + 2) + 's';
+            piece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            piece.style.width = (Math.random() * 8 + 6) + 'px';
+            piece.style.height = (Math.random() * 8 + 6) + 'px';
+            document.body.appendChild(piece);
+            setTimeout(() => piece.remove(), 4000);
         }
     }
 
@@ -409,7 +657,7 @@
             }
             if (e.key === 'Escape') {
                 if (modalElement === resumeModal) {
-                    resumeNo.click();
+                    if (resumeNo.onclick) resumeNo.onclick();
                 } else if (modalElement === fulltextModal) {
                     closeFullTextModal();
                 }
@@ -427,61 +675,14 @@
         }
     }
 
-    // ---------- eventos de entrada ----------
-    textInput.addEventListener('input', updateSentenceCounter);
-    btnStart.addEventListener('click', () => {
-        const s = parseSentences(textInput.value);
-        if (s.length < 2) {
-            showToast('Mínimo de 2 frases necessário.');
-            return;
-        }
-        sentences = s;
-        originalText = textInput.value;
-        originalTextHash = generateTextHash(originalText);
-        showScreen(screenMethod);
-        selectedMethod = null;
-        methodOptions.forEach(btn => btn.classList.remove('selected'));
-        btnConfirmMethod.disabled = true;
-        lucide.createIcons();
-    });
-
-    btnResetStorage.addEventListener('click', () => {
-        if (localStorage.getItem(STORAGE_KEY)) {
-            clearProgress();
-            showToast('Progresso resetado.');
-        } else {
-            showToast('Nenhum progresso salvo.');
-        }
-    });
-
-    // seleção de método
-    methodOptions.forEach(btn => {
-        btn.addEventListener('click', () => {
-            methodOptions.forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            selectedMethod = btn.dataset.method;
-            btnConfirmMethod.disabled = false;
-        });
-    });
-
-    btnConfirmMethod.addEventListener('click', () => {
-        if (!selectedMethod) return;
-        method = selectedMethod;
-        currentLevel = 0;
-        currentIndexWithinLevel = 0;
-        showScreen(screenPlay);
-        saveProgress();
-        renderCard();
-        lucide.createIcons();
-    });
-
-    // navegação
+    // ---------- eventos da tela de treino ----------
     btnNext.addEventListener('click', handleNext);
     btnPrev.addEventListener('click', handlePrev);
 
     btnEditText.addEventListener('click', () => {
         if (confirm('Editar o texto reiniciará seu progresso. Continuar?')) {
-            clearProgress();
+            clearProgressForCurrentText();
+            isEditing = true;
             textInput.value = originalText;
             updateSentenceCounter();
             showScreen(screenInput);
@@ -502,10 +703,14 @@
     });
 
     btnRestart.addEventListener('click', () => {
-        clearProgress();
-        textInput.value = originalText || '';
-        updateSentenceCounter();
-        showScreen(screenInput);
+        resetTrainingState();
+        showScreen(screenPlay);
+        renderCard();
+    });
+
+    btnBackLibraryComplete.addEventListener('click', () => {
+        showScreen(screenLibrary);
+        renderLibrary();
     });
 
     // teclas de atalho
@@ -527,77 +732,9 @@
         }
     });
 
-    // modal de retomada
-    function checkResume() {
-        const saved = loadProgress();
-        if (saved && saved.text && saved.method) {
-            const savedHash = saved.hash || '';
-            const currentHash = generateTextHash(saved.text);
-            if (savedHash && savedHash !== currentHash) {
-                clearProgress();
-                showScreen(screenInput);
-                textInput.focus();
-                return;
-            }
-            resumeModal.classList.remove('hidden');
-            trapFocus(resumeModal);
-            resumeYes.focus();
-        } else {
-            showScreen(screenInput);
-            textInput.focus();
-        }
-    }
-
-    resumeYes.addEventListener('click', () => {
-        const saved = loadProgress();
-        if (!saved) {
-            removeTrap(resumeModal);
-            resumeModal.classList.add('hidden');
-            showScreen(screenInput);
-            return;
-        }
-        sentences = parseSentences(saved.text);
-        if (sentences.length < 2) {
-            clearProgress();
-            removeTrap(resumeModal);
-            resumeModal.classList.add('hidden');
-            showScreen(screenInput);
-            textInput.value = saved.text;
-            updateSentenceCounter();
-            return;
-        }
-        originalText = saved.text;
-        originalTextHash = generateTextHash(originalText);
-        textInput.value = saved.text;
-        method = saved.method;
-        currentLevel = saved.currentLevel;
-        currentIndexWithinLevel = saved.method === 'serial' ? (saved.currentIndexWithinLevel || 0) : 0;
-        removeTrap(resumeModal);
-        resumeModal.classList.add('hidden');
-        showScreen(screenPlay);
-        renderCard();
-        lucide.createIcons();
-    });
-
-    resumeNo.addEventListener('click', () => {
-        clearProgress();
-        removeTrap(resumeModal);
-        resumeModal.classList.add('hidden');
-        showScreen(screenInput);
-        textInput.focus();
-    });
-
-    resumeModal.addEventListener('click', (e) => {
-        if (e.target === resumeModal) resumeNo.click();
-    });
-
     // inicialização
     window.addEventListener('DOMContentLoaded', () => {
-        updateSentenceCounter();
-        checkResume();
+        renderLibrary();
         lucide.createIcons();
-        if (screenInput.classList.contains('hidden') === false) {
-            textInput.focus();
-        }
     });
 })();
