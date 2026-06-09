@@ -7,9 +7,6 @@
     const screenComplete = document.getElementById('screen-complete');
     const resumeModal = document.getElementById('resume-modal');
     const fulltextModal = document.getElementById('fulltext-modal');
-    const toast = document.getElementById('toast');
-    const toastMsg = document.getElementById('toast-msg');
-    const toastIcon = document.getElementById('toast-icon');
 
     const textList = document.getElementById('text-list');
     const emptyLibrary = document.getElementById('empty-library');
@@ -29,7 +26,6 @@
     const levelIndicator = document.getElementById('level-indicator');
     const modeBadge = document.getElementById('mode-badge');
     const progressBarFill = document.getElementById('progress-bar-fill');
-    const progressPct = document.getElementById('progress-pct');
     const contextIndicator = document.getElementById('context-indicator');
     const cardContent = document.getElementById('card-content');
     const recitationHint = document.getElementById('recitation-hint');
@@ -114,20 +110,8 @@
     }
 
     // ---------- utilidades ----------
-    function showToast(msg, type) {
-        const icons = { success: '✓', warning: '⚠', info: 'ℹ' };
-        toastIcon.textContent = type && icons[type] ? icons[type] : '';
-        toastMsg.textContent = msg;
-        toast.classList.remove('toast--success', 'toast--warning', 'toast--info');
-        if (type && icons[type]) toast.classList.add('toast--' + type);
-        toast.classList.remove('hidden');
-        void toast.offsetWidth;
-        clearTimeout(toast._timeout);
-        toast._timeout = setTimeout(() => {
-            toast.classList.add('hidden');
-            toast.classList.remove('toast--success', 'toast--warning', 'toast--info');
-        }, 2500);
-    }
+    // Avisos popup removidos: showToast é um no-op para não quebrar as chamadas existentes.
+    function showToast() {}
 
     function generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -424,6 +408,9 @@
         }, { once: true });
         lucide.createIcons();
 
+        // Ajuste visual: oculta a navbar fixa durante a sessão de estudo para liberar espaço
+        document.body.classList.toggle('study-mode', screen === screenPlay);
+
         // Foco automático em btn-next ao entrar na tela de treino
         if (screen === screenPlay) {
             setTimeout(() => btnNext && btnNext.focus(), 80);
@@ -675,12 +662,6 @@
             renderSerialMode();
         } else if (method === 'sliding') {
             renderSlidingMode();
-        }
-
-        // Sincroniza label de % com a barra já preenchida pelos render*Mode
-        if (progressPct) {
-            const w = parseFloat(progressBarFill.style.width) || 0;
-            progressPct.textContent = Math.round(w) + '%';
         }
 
         // "Page up" suave: ao trocar de frase, volta ao topo do cartão

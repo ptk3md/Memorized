@@ -63,9 +63,6 @@ textarea:focus-visible,
         animation: none !important;
         opacity: 0 !important;
     }
-    .toast {
-        animation: none !important;
-    }
     .screen-transition-enter {
         animation: none !important;
     }
@@ -129,6 +126,14 @@ textarea:focus-visible,
 #screen-play,
 #screen-complete {
     padding-top: var(--screen-pad-top);
+}
+
+/* ========== SESSÃO DE ESTUDO: navbar oculta para liberar espaço vertical ========== */
+body.study-mode .app-navbar {
+    display: none;
+}
+body.study-mode #screen-play {
+    padding-top: 0.75rem;
 }
 
 /* ========== TRANSIÇÕES DE TELA ========== */
@@ -200,21 +205,16 @@ textarea:focus-visible,
     scroll-behavior: smooth;
 }
 
-/* ========== MODO MICRO ESCADAS: 4 blocos integrais sem scroll ========== */
+/* ========== MODO MICRO ESCADAS: ajuste adaptativo de tamanho ========== */
+/* Fonte um pouco menor + mais altura disponível (navbar e % ocultos durante o estudo),
+   sem cortar texto: o scroll do cartão (overflow-y: auto) cobre o excesso. */
 .prettify-flashcard[data-mode="sliding"] {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 0.4em;
-    max-height: calc(100vh - 320px); /* ocupa a área disponível da tela */
-    height: auto;
-}
-.prettify-flashcard[data-mode="sliding"] > .prettify-field {
-    display: contents; /* permite que os <p> participem do flex do cartão */
+    font-size: clamp(0.85rem, 3.2vw, 1.2rem);
+    line-height: 1.45;
+    max-height: calc(100vh - 230px);
 }
 .prettify-flashcard[data-mode="sliding"] .prettify-field p {
-    margin-bottom: 0;
-    overflow: hidden; /* scroll só no cartão, quando um parágrafo for muito longo */
+    margin-bottom: 0.5em;
 }
 
 .prettify-field .current-block-phrase {
@@ -292,17 +292,6 @@ sub.custom-math {
     animation: softEntrance var(--anim-time) var(--anim-curve) both;
 }
 
-@keyframes toastIn {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
 @keyframes warningPulse {
     0%   { transform: translateX(0); }
     25%  { transform: translateX(-4px); }
@@ -332,31 +321,6 @@ sub.custom-math {
     border-radius: 2px;
     animation: confettiFall 3s linear forwards;
     z-index: 100;
-}
-
-/* ========== TOAST ========== */
-.toast {
-    animation: toastIn 0.3s ease both;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 160px;
-    max-width: 340px;
-}
-.toast--success {
-    background: #1e3a2f !important;
-    border: 1px solid #2e6048;
-    color: #81c784 !important;
-}
-.toast--warning {
-    background: #3a2a1a !important;
-    border: 1px solid #6b4224;
-    color: #ffb74d !important;
-}
-.toast--info {
-    background: #1a2a3a !important;
-    border: 1px solid #244a6b;
-    color: var(--accent-secondary) !important;
 }
 
 /* ========== BOTÕES ========== */
@@ -972,4 +936,7 @@ body.zen-mode .zen-hide {
 /* No modo zen o cartão ganha mais respiro vertical */
 body.zen-mode .prettify-flashcard {
     max-height: 70vh;
+}
+body.zen-mode .prettify-flashcard[data-mode="sliding"] {
+    max-height: calc(100vh - 150px);
 }
