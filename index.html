@@ -10,23 +10,37 @@
 </head>
 <body class="h-full flex flex-col">
 
+    <!-- ========== NAVBAR FIXA ========== -->
+    <nav class="app-navbar" aria-label="Navegação principal">
+        <span class="app-navbar__title">Memorizador</span>
+        <button class="app-navbar__gear" id="btn-settings" aria-label="Configurações">
+            <i data-lucide="settings" class="w-4 h-4"></i>
+        </button>
+    </nav>
+
     <!-- Toast container -->
-    <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden toast bg-[#333] text-white px-5 py-2 rounded-full text-sm font-medium shadow-lg" aria-live="polite"></div>
+    <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden bg-[#333] text-white px-5 py-2 rounded-full text-sm font-medium shadow-lg toast" aria-live="polite" aria-atomic="true">
+        <span id="toast-icon" aria-hidden="true"></span>
+        <span id="toast-msg"></span>
+    </div>
 
     <!-- ========== TELA 0: BIBLIOTECA ========== -->
     <div id="screen-library" class="flex-1 flex flex-col p-6">
         <div class="flex justify-between items-center mb-4">
             <h1 class="text-sm font-bold tracking-widest uppercase">Seus Textos</h1>
-            <button id="btn-new-text" class="btn-claude-primary px-4 py-2 rounded text-xs uppercase tracking-wider flex items-center gap-1" aria-label="Novo texto">
-                <i data-lucide="plus" class="w-3 h-3"></i> Novo
+            <button id="btn-new-text" class="btn-claude-primary px-5 py-2 rounded-lg text-xs uppercase tracking-wider flex items-center gap-2 font-bold" aria-label="Criar novo texto">
+                <i data-lucide="plus" class="w-4 h-4"></i> Novo texto
             </button>
         </div>
-        <div id="text-list" class="flex-1 overflow-y-auto space-y-3">
-            <!-- Itens da biblioteca serão inseridos aqui dinamicamente -->
+        <div id="text-list" class="flex-1 overflow-y-auto space-y-3 hidden">
+            <!-- Itens da biblioteca são inseridos aqui dinamicamente -->
         </div>
-        <div id="empty-library" class="flex-1 flex flex-col items-center justify-center text-center space-y-3">
-            <i data-lucide="book-open" class="w-8 h-8" style="color: var(--text-fg-faint);"></i>
-            <p class="text-xs" style="color: var(--text-fg-faint);">Nenhum texto salvo ainda.<br>Crie um novo para começar.</p>
+        <div id="empty-library" class="lib-empty hidden">
+            <i data-lucide="book-open" class="lib-empty__icon"></i>
+            <p class="lib-empty__text">Nenhum texto salvo ainda.<br>Que tal criar o seu primeiro?</p>
+            <button class="lib-empty__cta" id="btn-new-text-empty" aria-label="Criar primeiro texto">
+                <i data-lucide="plus" class="w-3 h-3"></i> Criar primeiro texto
+            </button>
         </div>
     </div>
 
@@ -38,17 +52,23 @@
                     <i data-lucide="arrow-left" class="w-3 h-3"></i> Biblioteca
                 </button>
             </div>
-            <textarea id="text-input" placeholder="Cole seu texto aqui..." aria-label="Texto para memorizar"
-                class="w-full h-48 textarea-claude rounded-lg p-4 text-base font-sans resize-none transition-all duration-150"></textarea>
+            <textarea id="text-input"
+                placeholder="Cole aqui o texto que você quer memorizar. O app vai dividir automaticamente em frases para o treino progressivo."
+                aria-label="Texto para memorizar"
+                class="w-full textarea-claude rounded-lg p-4 text-base font-sans resize-none transition-all duration-150"
+                style="min-height: 200px; height: calc(100vh - 400px); max-height: 400px;"></textarea>
             <div class="flex justify-between items-center text-xs" style="color: var(--text-fg-faint);">
                 <span id="sentence-counter">0 frases detectadas</span>
                 <button id="btn-reset-storage" class="underline hover:text-white transition" aria-label="Resetar todo o progresso">Resetar tudo</button>
             </div>
             <div id="sentence-preview" class="sentence-preview" aria-label="Pré-visualização das frases detectadas"></div>
-            <p id="warning-few-sentences" class="text-xs hidden" style="color: #e08b7a;">⚠️ O texto precisa ter pelo menos 2 frases para iniciar.</p>
+            <p id="warning-few-sentences" class="text-xs hidden flex items-center gap-1" style="color: #e08b7a;">
+                <i data-lucide="alert-triangle" class="w-3 h-3 flex-shrink-0"></i>
+                O texto precisa ter pelo menos 2 frases para iniciar.
+            </p>
         </div>
         <div class="pt-6">
-            <button id="btn-start" class="w-full h-14 btn-claude-primary font-bold uppercase tracking-widest text-xs rounded-lg disabled:opacity-40 disabled:cursor-not-allowed" disabled aria-label="Começar">Começar</button>
+            <button id="btn-start" class="w-full h-14 btn-claude-primary font-bold uppercase tracking-widest text-xs rounded-lg disabled:opacity-40 disabled:cursor-not-allowed" disabled aria-label="Começar treino">Começar</button>
         </div>
     </div>
 
@@ -60,27 +80,45 @@
                 <button class="method-option" data-method="block" aria-label="Modo Bloco Simultâneo Clássico">
                     <div class="flex items-start gap-3">
                         <i data-lucide="layout-grid" class="w-5 h-5 mt-0.5 flex-shrink-0" style="color:var(--accent);"></i>
-                        <div>
-                            <span class="font-bold text-sm">Modo Bloco Simultâneo (Clássico)</span>
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="font-bold text-sm">Bloco Simultâneo</span>
+                                <span class="method-option__check" aria-hidden="true">
+                                    <i data-lucide="check" class="w-3 h-3"></i>
+                                </span>
+                            </div>
                             <p class="text-xs mt-1" style="color:var(--text-fg-faint);">Todas as frases acumuladas aparecem de uma só vez. Pratique recitando o bloco inteiro.</p>
+                            <span class="method-option__badge method-badge--block">Recomendado para textos curtos</span>
                         </div>
                     </div>
                 </button>
                 <button class="method-option" data-method="serial" aria-label="Modo Serial Acumulativo">
                     <div class="flex items-start gap-3">
-                        <i data-lucide="list-ordered" class="w-5 h-5 mt-0.5 flex-shrink-0" style="color:var(--accent);"></i>
-                        <div>
-                            <span class="font-bold text-sm">Modo Serial Acumulativo (Anki Like)</span>
+                        <i data-lucide="list-ordered" class="w-5 h-5 mt-0.5 flex-shrink-0" style="color:var(--accent-secondary);"></i>
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="font-bold text-sm">Serial Acumulativo</span>
+                                <span class="method-option__check" aria-hidden="true">
+                                    <i data-lucide="check" class="w-3 h-3"></i>
+                                </span>
+                            </div>
                             <p class="text-xs mt-1" style="color:var(--text-fg-faint);">Uma frase por vez, na ordem acumulativa. A cada nível você revisa todas as anteriores antes da nova.</p>
+                            <span class="method-option__badge method-badge--serial">Recomendado para revisão profunda</span>
                         </div>
                     </div>
                 </button>
                 <button class="method-option" data-method="sliding" aria-label="Micro Escadas com Janela Deslizante">
                     <div class="flex items-start gap-3">
-                        <i data-lucide="layers" class="w-5 h-5 mt-0.5 flex-shrink-0" style="color:var(--accent);"></i>
-                        <div>
-                            <span class="font-bold text-sm">Micro Escadas (Janela Deslizante)</span>
-                            <p class="text-xs mt-1" style="color:var(--text-fg-faint);">A cada nível, uma janela de até 4 frases desliza pelo texto. Cada frase aparece no máximo 4 vezes, ideal para textos longos.</p>
+                        <i data-lucide="layers" class="w-5 h-5 mt-0.5 flex-shrink-0" style="color:#81c784;"></i>
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="font-bold text-sm">Micro Escadas</span>
+                                <span class="method-option__check" aria-hidden="true">
+                                    <i data-lucide="check" class="w-3 h-3"></i>
+                                </span>
+                            </div>
+                            <p class="text-xs mt-1" style="color:var(--text-fg-faint);">Janela deslizante de até 4 frases. Cada frase aparece no máximo 4 vezes, ideal para textos longos.</p>
+                            <span class="method-option__badge method-badge--sliding">Recomendado para textos longos</span>
                         </div>
                     </div>
                 </button>
@@ -96,7 +134,10 @@
         <div class="space-y-2">
             <div class="flex justify-between items-center text-xs" style="color: var(--text-fg-faint);">
                 <span id="level-indicator">Nível 1 de 1</span>
-                <span id="mode-badge" class="px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wider" style="border-color:#555;">Bloco</span>
+                <div class="flex items-center gap-2">
+                    <span id="progress-pct" class="text-xs font-bold" style="color:var(--text-fg);">0%</span>
+                    <span id="mode-badge">Bloco</span>
+                </div>
             </div>
             <div class="progress-bar-bg">
                 <div id="progress-bar-fill" class="progress-bar-fill" style="width:0%;"></div>
@@ -112,7 +153,7 @@
 
         <div class="space-y-3">
             <p id="recitation-hint" class="text-xs text-center" style="color: var(--text-fg-faint);"></p>
-            <button id="btn-next" class="w-full h-14 btn-claude-primary font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Próximo passo">
+            <button id="btn-next" class="w-full h-14 btn-claude-primary btn-ripple font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Próximo passo">
                 <span>Próxima</span>
                 <i data-lucide="chevron-right" class="w-4 h-4"></i>
             </button>
@@ -134,6 +175,7 @@
                 <span><kbd>→</kbd> ou <kbd>Espaço</kbd> Avançar</span>
                 <span><kbd>←</kbd> Voltar</span>
                 <span><kbd>R</kbd> Reiniciar</span>
+                <span><kbd>B</kbd> Biblioteca</span>
             </div>
         </div>
     </div>
@@ -141,20 +183,20 @@
     <!-- ========== TELA 4: CONCLUSÃO ========== -->
     <div id="screen-complete" class="hidden flex-1 flex flex-col justify-between p-6 text-center">
         <div class="flex-1 flex flex-col items-center justify-center space-y-4">
-            <div class="w-12 h-12 border rounded-full flex items-center justify-center mb-2" style="border-color: var(--accent);">
-                <i data-lucide="check" class="w-5 h-5" style="color: var(--accent);"></i>
+            <div class="w-14 h-14 border-2 rounded-full flex items-center justify-center mb-2" style="border-color: var(--accent);">
+                <i data-lucide="check" class="w-6 h-6" style="color: var(--accent);"></i>
             </div>
             <h2 class="text-sm font-bold tracking-widest uppercase">Memorização Concluída</h2>
             <p class="text-xs max-w-xs leading-relaxed" style="color: var(--text-fg-faint);">
                 Você percorreu todas as frases com sucesso. O texto completo foi internalizado.
             </p>
-            <div id="complete-summary" class="text-xs max-w-md mt-2 p-3 rounded border" style="border-color:#333; background:#1e1e1e; color:var(--text-fg-faint);"></div>
+            <div id="complete-summary" class="text-xs max-w-md mt-2 p-3 rounded border w-full" style="border-color:#333; background:#1e1e1e; color:var(--text-fg-faint);"></div>
         </div>
-        <div class="flex gap-3">
-            <button id="btn-back-library-complete" class="flex-1 h-14 btn-claude-secondary font-bold uppercase tracking-widest text-xs rounded-lg" aria-label="Voltar para biblioteca">
-                Biblioteca
+        <div class="flex gap-3 pt-4">
+            <button id="btn-back-library-complete" class="flex-1 h-14 btn-claude-secondary font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Voltar para biblioteca">
+                <i data-lucide="library" class="w-4 h-4"></i> Biblioteca
             </button>
-            <button id="btn-restart" class="flex-1 h-14 btn-claude-secondary font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Reiniciar">
+            <button id="btn-restart" class="flex-1 h-14 btn-claude-secondary font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Reiniciar treino">
                 <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reiniciar
             </button>
         </div>
@@ -182,6 +224,27 @@
                 </button>
             </div>
             <div id="fulltext-content" class="text-xs leading-relaxed" style="color:var(--text-fg-faint); white-space:pre-wrap;"></div>
+        </div>
+    </div>
+
+    <!-- ========== MODAL DE CONFIRMAÇÃO / DELETE ========== -->
+    <div id="delete-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+        <div class="modal-content space-y-4">
+            <div class="delete-modal-icon">
+                <i data-lucide="trash-2" class="w-5 h-5"></i>
+            </div>
+            <p id="delete-modal-title" class="font-bold text-sm text-center">Apagar texto?</p>
+            <p id="delete-modal-desc" class="text-xs text-center" style="color:var(--text-fg-faint);">
+                Esta ação não pode ser desfeita.
+            </p>
+            <div class="flex gap-3 justify-end">
+                <button id="delete-modal-cancel" class="btn-claude-secondary px-4 py-2 rounded text-xs uppercase tracking-wider" aria-label="Cancelar">
+                    Cancelar
+                </button>
+                <button id="delete-modal-confirm" class="px-4 py-2 rounded text-xs uppercase tracking-wider font-bold" style="background:#c62828; color:#fff;" aria-label="Confirmar ação">
+                    Confirmar
+                </button>
+            </div>
         </div>
     </div>
 
