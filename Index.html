@@ -1,1 +1,846 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Memorizador · Claude Dark</title>
+    <script src="https://cdn.tailwindcss.com">
+    </script>
+    <script src="https://unpkg.com/lucide@latest">
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap');
 
+        :root {
+            --card-max-width: 40em;
+            --card-padding: 24px;
+            --card-box-shadow: none;
+            --spacing-block-gap: 0.15em;
+            --font-family: 'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-size-regular: 20px;
+            --font-size-small: 18px;
+            --line-height: 1.6;
+            --card-text-align: left;
+            --bg-main: #191919;
+            --card-bg: #222222;
+            --card-border: #2e2e2e;
+            --divider-color: #3a3530;
+            --text-fg: #f5f5f5;
+            --text-fg-faint: #b0aca8;
+            --accent: #d97757;
+            --text-bg-selected: rgba(217, 119, 87, 0.3);
+            --cloze-fg: var(--accent);
+            --cloze-bg: transparent;
+            --link-fg: #93c5fd;
+            --link-fg-active: var(--accent);
+            --bold-fg: var(--accent);
+            --italic-fg: var(--text-fg-faint);
+            --bold-italic-fg: var(--accent);
+            --underline-fg: var(--accent);
+            --anim-time: 0.28s;
+            --anim-curve: cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-family) !important;
+            background-color: var(--bg-main);
+            color: var(--text-fg);
+            margin: 0;
+            height: 100%;
+        }
+
+        /* Foco visível para acessibilidade */
+        button:focus-visible,
+        textarea:focus-visible,
+        [tabindex]:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .prettify-flashcard {
+            position: relative;
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--card-border);
+            box-shadow: var(--card-box-shadow);
+            padding: var(--card-padding);
+            margin: 0 auto;
+            width: 100%;
+            max-width: var(--card-max-width);
+            color: var(--text-fg);
+            font-size: var(--font-size-regular);
+            line-height: var(--line-height);
+            text-align: var(--card-text-align);
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .prettify-field {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+        .prettify-field p {
+            margin-bottom: 0.8em;
+        }
+        .prettify-field p:last-child {
+            margin-bottom: 0;
+        }
+
+        b,
+        strong {
+            color: var(--bold-fg);
+            font-weight: 700;
+        }
+        i,
+        em {
+            color: var(--italic-fg);
+        }
+        b>i,
+        i>b,
+        strong>em,
+        em>strong {
+            color: var(--bold-italic-fg);
+        }
+        u {
+            color: var(--underline-fg);
+            text-decoration-thickness: .12em;
+            text-underline-offset: .14em;
+            text-decoration-color: var(--underline-fg);
+        }
+
+        sup.custom-math,
+        sub.custom-math {
+            font-size: 0.72em;
+            line-height: 0;
+            position: relative;
+            vertical-align: baseline;
+            font-weight: 700;
+        }
+        sup.custom-math {
+            top: -0.5em;
+        }
+        sub.custom-math {
+            bottom: -0.25em;
+        }
+        .custom-math-inline {
+            color: inherit;
+            font-weight: 700;
+        }
+
+        @keyframes softEntrance {
+            from {
+                opacity: 0;
+                transform: translateY(8px) scale(.995);
+            }
+            to {
+                opacity: 1;
+                transform: none;
+            }
+        }
+        .animate-entrance {
+            animation: softEntrance var(--anim-time) var(--anim-curve) both;
+        }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .toast {
+            animation: toastIn 0.3s ease both;
+        }
+
+        @keyframes confettiFall {
+            0% {
+                transform: translateY(0) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+        .confetti-piece {
+            position: fixed;
+            top: -20px;
+            width: 10px;
+            height: 10px;
+            background-color: var(--accent);
+            border-radius: 2px;
+            animation: confettiFall 3s linear forwards;
+            z-index: 100;
+        }
+
+        .btn-claude-primary {
+            background-color: var(--accent);
+            color: #ffffff;
+            transition: background-color 0.15s ease;
+        }
+        .btn-claude-primary:hover {
+            background-color: #c56546;
+        }
+        .btn-claude-primary:active {
+            background-color: #b05437;
+        }
+        .btn-claude-secondary {
+            background-color: #222222;
+            border: 1px solid #333333;
+            color: var(--text-fg);
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .btn-claude-secondary:hover {
+            background-color: #2a2a2a;
+            border-color: #444444;
+        }
+        .btn-claude-secondary:active {
+            background-color: #1e1e1e;
+        }
+        .textarea-claude {
+            background-color: #222222;
+            border: 1px solid #333333;
+            color: var(--text-fg);
+        }
+        .textarea-claude:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        /* Método selecionável */
+        .method-option {
+            background-color: #222222;
+            border: 1px solid #333333;
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-align: left;
+            width: 100%;
+        }
+        .method-option:hover {
+            border-color: #555;
+        }
+        .method-option.selected {
+            border-color: var(--accent);
+            background-color: #2a2624;
+        }
+
+        /* Barra de progresso */
+        .progress-bar-bg {
+            background-color: #333;
+            border-radius: 4px;
+            height: 6px;
+            width: 100%;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            background-color: var(--accent);
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.2s ease;
+        }
+
+        /* Modal overlay */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+        .modal-content {
+            background: #222;
+            border: 1px solid #444;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 360px;
+            width: 90%;
+            color: #f5f5f5;
+        }
+
+        @media (max-width: 480px) {
+            .prettify-flashcard {
+                padding: 16px;
+                font-size: 18px;
+            }
+            .method-option {
+                padding: 12px;
+            }
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col">
+
+    <!-- Toast container -->
+    <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden toast bg-[#333] text-white px-5 py-2 rounded-full text-sm font-medium shadow-lg" aria-live="polite"></div>
+
+    <!-- ========== TELA 1: ENTRADA ========== -->
+    <div id="screen-input" class="flex-1 flex flex-col justify-between p-6">
+        <div class="flex-1 flex flex-col space-y-4">
+            <textarea id="text-input" placeholder="Cole seu texto aqui..." aria-label="Texto para memorizar"
+                class="w-full h-48 textarea-claude rounded-lg p-4 text-base font-sans resize-none transition-all duration-150"></textarea>
+            <div class="flex justify-between items-center text-xs" style="color: var(--text-fg-faint);">
+                <span id="sentence-counter">0 frases detectadas</span>
+                <button id="btn-reset-storage" class="underline hover:text-white transition" aria-label="Resetar progresso salvo">Resetar progresso</button>
+            </div>
+            <p id="warning-few-sentences" class="text-xs hidden" style="color: #e08b7a;">⚠️ O texto precisa ter pelo menos 2 frases para iniciar.</p>
+        </div>
+        <div class="pt-6">
+            <button id="btn-start" class="w-full h-14 btn-claude-primary font-bold uppercase tracking-widest text-xs rounded-lg disabled:opacity-40 disabled:cursor-not-allowed" disabled aria-label="Começar">Começar</button>
+        </div>
+    </div>
+
+    <!-- ========== TELA 2: SELEÇÃO DE MÉTODO ========== -->
+    <div id="screen-method" class="hidden flex-1 flex flex-col justify-between p-6">
+        <div class="flex-1 flex flex-col justify-center space-y-6">
+            <h2 class="text-sm font-bold tracking-widest uppercase text-center">Escolha o método de treino</h2>
+            <div class="space-y-3">
+                <button class="method-option" data-method="block" aria-label="Modo Bloco Simultâneo Clássico">
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="layout-grid" class="w-5 h-5 mt-0.5 flex-shrink-0" style="color:var(--accent);"></i>
+                        <div>
+                            <span class="font-bold text-sm">Modo Bloco Simultâneo (Clássico)</span>
+                            <p class="text-xs mt-1" style="color:var(--text-fg-faint);">Todas as frases acumuladas aparecem de uma só vez. Pratique recitando o bloco inteiro.</p>
+                        </div>
+                    </div>
+                </button>
+                <button class="method-option" data-method="serial" aria-label="Modo Serial Acumulativo">
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="list-ordered" class="w-5 h-5 mt-0.5 flex-shrink-0" style="color:var(--accent);"></i>
+                        <div>
+                            <span class="font-bold text-sm">Modo Serial Acumulativo (Sua variante)</span>
+                            <p class="text-xs mt-1" style="color:var(--text-fg-faint);">Uma frase por vez, na ordem acumulativa. A cada nível você revisa todas as anteriores antes da nova.</p>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </div>
+        <div class="pt-6">
+            <button id="btn-confirm-method" class="w-full h-14 btn-claude-primary font-bold uppercase tracking-widest text-xs rounded-lg disabled:opacity-40 disabled:cursor-not-allowed" disabled aria-label="Confirmar método">Confirmar</button>
+        </div>
+    </div>
+
+    <!-- ========== TELA 3: MEMORIZAÇÃO ========== -->
+    <div id="screen-play" class="hidden flex-1 flex flex-col justify-between p-6">
+        <div class="space-y-2">
+            <div class="flex justify-between items-center text-xs" style="color: var(--text-fg-faint);">
+                <span id="level-indicator">Nível 1 de 1</span>
+                <span id="mode-badge" class="px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wider" style="border-color:#555;">Bloco</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div id="progress-bar-fill" class="progress-bar-fill" style="width:0%;"></div>
+            </div>
+            <div id="context-indicator" class="text-xs mt-1" style="color: var(--text-fg-faint);"></div>
+        </div>
+
+        <div class="flex-1 flex items-center justify-center py-4">
+            <div class="prettify-flashcard animate-entrance">
+                <div id="card-content" class="prettify-field"></div>
+            </div>
+        </div>
+
+        <div class="space-y-3">
+            <p id="recitation-hint" class="text-xs text-center" style="color: var(--text-fg-faint);"></p>
+            <button id="btn-next" class="w-full h-14 btn-claude-primary font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Próximo passo">
+                <span>Próxima</span>
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+            <div class="flex justify-between items-center px-1">
+                <button id="btn-prev" class="text-xs uppercase tracking-widest font-bold py-2 transition-colors disabled:opacity-20 flex items-center gap-1" style="color: var(--text-fg-faint);" aria-label="Voltar">
+                    <i data-lucide="chevron-left" class="w-3 h-3"></i> Voltar
+                </button>
+                <button id="btn-edit-text" class="text-xs uppercase tracking-widest font-bold py-2 transition-colors flex items-center gap-1" style="color: var(--text-fg-faint);" aria-label="Editar texto">
+                    <i data-lucide="edit-2" class="w-3 h-3"></i> Editar
+                </button>
+                <button id="btn-reset-training" class="text-xs uppercase tracking-widest font-bold py-2 transition-colors flex items-center gap-1" style="color: var(--text-fg-faint);" aria-label="Reiniciar treino">
+                    <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Reiniciar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== TELA 4: CONCLUSÃO ========== -->
+    <div id="screen-complete" class="hidden flex-1 flex flex-col justify-between p-6 text-center">
+        <div class="flex-1 flex flex-col items-center justify-center space-y-4">
+            <div class="w-12 h-12 border rounded-full flex items-center justify-center mb-2" style="border-color: var(--accent);">
+                <i data-lucide="check" class="w-5 h-5" style="color: var(--accent);"></i>
+            </div>
+            <h2 class="text-sm font-bold tracking-widest uppercase">Memorização Concluída</h2>
+            <p class="text-xs max-w-xs leading-relaxed" style="color: var(--text-fg-faint);">
+                Você percorreu todas as frases com sucesso. O texto completo foi internalizado.
+            </p>
+            <div id="complete-summary" class="text-xs max-w-md mt-2 p-3 rounded border" style="border-color:#333; background:#1e1e1e; color:var(--text-fg-faint);"></div>
+        </div>
+        <div>
+            <button id="btn-restart" class="w-full h-14 btn-claude-secondary font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Reiniciar">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reiniciar
+            </button>
+        </div>
+    </div>
+
+    <!-- ========== MODAL DE RETOMADA ========== -->
+    <div id="resume-modal" class="modal-overlay hidden">
+        <div class="modal-content space-y-4">
+            <p class="font-bold text-sm">Treino anterior encontrado</p>
+            <p class="text-xs" style="color:var(--text-fg-faint);">Deseja retomar de onde parou?</p>
+            <div class="flex gap-3 justify-end">
+                <button id="resume-no" class="btn-claude-secondary px-4 py-2 rounded text-xs uppercase tracking-wider" aria-label="Recomeçar">Recomeçar</button>
+                <button id="resume-yes" class="btn-claude-primary px-4 py-2 rounded text-xs uppercase tracking-wider" aria-label="Retomar">Retomar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ---------- elementos DOM ----------
+            const screenInput = document.getElementById('screen-input');
+            const screenMethod = document.getElementById('screen-method');
+            const screenPlay = document.getElementById('screen-play');
+            const screenComplete = document.getElementById('screen-complete');
+            const resumeModal = document.getElementById('resume-modal');
+            const toast = document.getElementById('toast');
+
+            const textInput = document.getElementById('text-input');
+            const sentenceCounter = document.getElementById('sentence-counter');
+            const warningFew = document.getElementById('warning-few-sentences');
+            const btnStart = document.getElementById('btn-start');
+            const btnResetStorage = document.getElementById('btn-reset-storage');
+
+            const methodOptions = document.querySelectorAll('.method-option');
+            const btnConfirmMethod = document.getElementById('btn-confirm-method');
+
+            const levelIndicator = document.getElementById('level-indicator');
+            const modeBadge = document.getElementById('mode-badge');
+            const progressBarFill = document.getElementById('progress-bar-fill');
+            const contextIndicator = document.getElementById('context-indicator');
+            const cardContent = document.getElementById('card-content');
+            const recitationHint = document.getElementById('recitation-hint');
+            const btnNext = document.getElementById('btn-next');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnEditText = document.getElementById('btn-edit-text');
+            const btnResetTraining = document.getElementById('btn-reset-training');
+
+            const completeSummary = document.getElementById('complete-summary');
+            const btnRestart = document.getElementById('btn-restart');
+            const resumeYes = document.getElementById('resume-yes');
+            const resumeNo = document.getElementById('resume-no');
+
+            // ---------- estado da aplicação ----------
+            let sentences = [];
+            let method = null; // 'block' | 'serial'
+            let originalText = '';
+            let currentLevel = 0; // nível atual (índice da última frase incluída)
+            let currentIndexWithinLevel = 0; // usado apenas no serial
+            let selectedMethod = null; // para tela de seleção
+
+            const STORAGE_KEY = 'memorizador-progress';
+
+            // ---------- utilidades ----------
+            function showToast(msg) {
+                toast.textContent = msg;
+                toast.classList.remove('hidden');
+                void toast.offsetWidth;
+                toast.classList.add('toast');
+                clearTimeout(toast._timeout);
+                toast._timeout = setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 2000);
+            }
+
+            function formatAnkiMarkup(raw) {
+                let c = (raw || "").trim();
+                if (!/<\/?[a-z]/i.test(c)) {
+                    c = c.split(/\n{2,}/).filter(Boolean).map(s =>
+                        `<p>${s.trim().replace(/\n/g, "<br>")}</p>`
+                    ).join("") || `<p>${c}</p>`;
+                }
+                const PAIRS = [
+                    [/\\geq?\b/g, "&ge;"],
+                    [/\\leq?\b/g, "&le;"],
+                    [/\\neq?\b/g, "&ne;"],
+                    [/\\pm\b/g, "&plusmn;"],
+                    [/\\approx\b/g, "&asymp;"],
+                    [/\\%/g, "%"],
+                    [/-->/g, "&rarr;"],
+                    [/<--/g, "&larr;"],
+                    [/\\rightarrow\b/g, "&rarr;"],
+                    [/\\leftarrow\b/g, "&larr;"],
+                    [/\^o/g, "°"]
+                ];
+                for (const [r, v] of PAIRS) c = c.replace(r, v);
+                c = c.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "$1/$2");
+                c = c.replace(/\$(.*?)\^\{(.*?)\}\$/g, "$1<sup class='custom-math'>$2</sup>");
+                c = c.replace(/\$(.*?)_\{(.*?)\}\$/g, "$1<sub class='custom-math'>$2</sub>");
+                c = c.replace(/\$([^$]+)\$/g, "<span class='custom-math-inline'>$1</span>");
+                return c;
+            }
+
+            function parseSentences(text) {
+                if (!text || !text.trim()) return [];
+                const blocks = text.split(/\n\s*\n/);
+                let result = [];
+                for (let block of blocks) {
+                    block = block.trim();
+                    if (!block) continue;
+                    const parts = block.split(/(?<=[.!?])\s+/);
+                    for (let part of parts) {
+                        const trimmed = part.trim();
+                        if (trimmed) result.push(trimmed);
+                    }
+                }
+                return result;
+            }
+
+            function updateSentenceCounter() {
+                const s = parseSentences(textInput.value);
+                const count = s.length;
+                sentenceCounter.textContent = `${count} frase${count !== 1 ? 's' : ''} detectada${count !== 1 ? 's' : ''}`;
+                if (count < 2) {
+                    warningFew.classList.remove('hidden');
+                    btnStart.disabled = true;
+                } else {
+                    warningFew.classList.add('hidden');
+                    btnStart.disabled = false;
+                }
+            }
+
+            // ---------- persistência ----------
+            function saveProgress() {
+                if (!method || !sentences.length) return;
+                const data = {
+                    text: originalText,
+                    method,
+                    currentLevel,
+                    currentIndexWithinLevel: method === 'serial' ? currentIndexWithinLevel : 0
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            }
+
+            function clearProgress() {
+                localStorage.removeItem(STORAGE_KEY);
+            }
+
+            function loadProgress() {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return null;
+                try {
+                    return JSON.parse(raw);
+                } catch {
+                    return null;
+                }
+            }
+
+            // ---------- troca de telas ----------
+            function showScreen(screen) {
+                screenInput.classList.add('hidden');
+                screenMethod.classList.add('hidden');
+                screenPlay.classList.add('hidden');
+                screenComplete.classList.add('hidden');
+                screen.classList.remove('hidden');
+                lucide.createIcons();
+            }
+
+            // ---------- confetes ----------
+            function spawnConfetti() {
+                const colors = ['#d97757', '#e6b89c', '#f5c6a0', '#f28b82', '#fbbc04', '#aecbfa', '#ff8a65'];
+                for (let i = 0; i < 60; i++) {
+                    const piece = document.createElement('div');
+                    piece.className = 'confetti-piece';
+                    piece.style.left = Math.random() * 100 + '%';
+                    piece.style.animationDelay = Math.random() * 2 + 's';
+                    piece.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                    piece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    piece.style.width = (Math.random() * 8 + 6) + 'px';
+                    piece.style.height = (Math.random() * 8 + 6) + 'px';
+                    document.body.appendChild(piece);
+                    setTimeout(() => piece.remove(), 4000);
+                }
+            }
+
+            // ---------- lógica de renderização do modo ----------
+            function renderCard() {
+                cardContent.parentElement.classList.remove('animate-entrance');
+                void cardContent.parentElement.offsetWidth;
+                cardContent.parentElement.classList.add('animate-entrance');
+
+                if (method === 'block') {
+                    // Exibe frases de 0 até currentLevel
+                    let html = '';
+                    for (let i = 0; i <= currentLevel; i++) {
+                        html += `<p style="margin-bottom:0.5em;"><span style="color:var(--accent);">${i+1}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+                    }
+                    cardContent.innerHTML = html;
+                    recitationHint.textContent = 'Recite todas as frases acima em voz alta.';
+                    levelIndicator.textContent = `Nível ${currentLevel+1} de ${sentences.length}`;
+                    contextIndicator.innerHTML = `Frases neste nível: <span style="color:var(--text-fg);">${sentences.slice(0, currentLevel+1).map(s => s.slice(0,25)+(s.length>25?'…':'')).join(' • ')}</span>`;
+                    modeBadge.textContent = 'Bloco';
+                    const progress = ((currentLevel + 1) / sentences.length) * 100;
+                    progressBarFill.style.width = `${progress}%`;
+                } else if (method === 'serial') {
+                    const phrase = sentences[currentIndexWithinLevel];
+                    cardContent.innerHTML = formatAnkiMarkup(phrase);
+                    levelIndicator.textContent = `Nível ${currentLevel+1} (acumula ${currentLevel+1} frase${currentLevel+1>1?'s':''})`;
+                    let contextHtml = '';
+                    for (let i = 0; i <= currentLevel; i++) {
+                        if (i < currentIndexWithinLevel) contextHtml +=
+                            `<span style="color:var(--accent);">✓ ${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
+                        else if (i === currentIndexWithinLevel) contextHtml +=
+                            `<span style="color:#fff;">▶ ${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
+                        else contextHtml +=
+                            `<span style="color:#555;">${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
+                    }
+                    contextIndicator.innerHTML = contextHtml.replace(/ • $/, '');
+                    recitationHint.textContent =
+                        'Recite mentalmente todas as frases que já apareceram neste nível antes de avançar.';
+                    modeBadge.textContent = 'Serial';
+                    // progresso: considera passos internos
+                    const totalSteps = (sentences.length * (sentences.length + 1)) / 2;
+                    let completedSteps = 0;
+                    for (let lvl = 0; lvl < currentLevel; lvl++) completedSteps += (lvl + 1);
+                    completedSteps += currentIndexWithinLevel + 1;
+                    const progress = Math.min(100, (completedSteps / totalSteps) * 100);
+                    progressBarFill.style.width = `${progress}%`;
+                }
+            }
+
+            function handleNext() {
+                if (method === 'block') {
+                    if (currentLevel < sentences.length - 1) {
+                        currentLevel++;
+                        saveProgress();
+                        renderCard();
+                        showToast(`Nível ${currentLevel+1} concluído!`);
+                    } else {
+                        // conclusão
+                        clearProgress();
+                        showCompleteScreen();
+                    }
+                } else if (method === 'serial') {
+                    if (currentIndexWithinLevel < currentLevel) {
+                        currentIndexWithinLevel++;
+                        saveProgress();
+                        renderCard();
+                    } else {
+                        // currentIndexWithinLevel == currentLevel
+                        if (currentLevel < sentences.length - 1) {
+                            currentLevel++;
+                            currentIndexWithinLevel = 0;
+                            saveProgress();
+                            renderCard();
+                            showToast(`Nível ${currentLevel+1} iniciado!`);
+                        } else {
+                            // conclusão total
+                            clearProgress();
+                            showCompleteScreen();
+                        }
+                    }
+                }
+            }
+
+            function handlePrev() {
+                if (method === 'block') {
+                    if (currentLevel > 0) {
+                        currentLevel--;
+                        saveProgress();
+                        renderCard();
+                    }
+                } else if (method === 'serial') {
+                    if (currentIndexWithinLevel > 0) {
+                        currentIndexWithinLevel--;
+                        saveProgress();
+                        renderCard();
+                    } else if (currentLevel > 0) {
+                        currentLevel--;
+                        currentIndexWithinLevel = currentLevel;
+                        saveProgress();
+                        renderCard();
+                    }
+                }
+            }
+
+            function showCompleteScreen() {
+                showScreen(screenComplete);
+                completeSummary.innerHTML = sentences.map((s, i) => `<p>${i+1}. ${s}</p>`).join('');
+                spawnConfetti();
+                lucide.createIcons();
+            }
+
+            function resetTrainingState() {
+                currentLevel = 0;
+                currentIndexWithinLevel = 0;
+                if (method && sentences.length) {
+                    saveProgress();
+                    renderCard();
+                }
+            }
+
+            // ---------- eventos de entrada ----------
+            textInput.addEventListener('input', updateSentenceCounter);
+            btnStart.addEventListener('click', () => {
+                const s = parseSentences(textInput.value);
+                if (s.length < 2) {
+                    showToast('Mínimo de 2 frases necessário.');
+                    return;
+                }
+                sentences = s;
+                originalText = textInput.value;
+                showScreen(screenMethod);
+                // reset seleção
+                selectedMethod = null;
+                methodOptions.forEach(btn => btn.classList.remove('selected'));
+                btnConfirmMethod.disabled = true;
+                lucide.createIcons();
+            });
+
+            btnResetStorage.addEventListener('click', () => {
+                if (localStorage.getItem(STORAGE_KEY)) {
+                    clearProgress();
+                    showToast('Progresso resetado.');
+                } else {
+                    showToast('Nenhum progresso salvo.');
+                }
+            });
+
+            // seleção de método
+            methodOptions.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    methodOptions.forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedMethod = btn.dataset.method;
+                    btnConfirmMethod.disabled = false;
+                });
+            });
+
+            btnConfirmMethod.addEventListener('click', () => {
+                if (!selectedMethod) return;
+                method = selectedMethod;
+                currentLevel = 0;
+                currentIndexWithinLevel = 0;
+                showScreen(screenPlay);
+                saveProgress();
+                renderCard();
+                lucide.createIcons();
+            });
+
+            // navegação no treino
+            btnNext.addEventListener('click', handleNext);
+            btnPrev.addEventListener('click', handlePrev);
+
+            btnEditText.addEventListener('click', () => {
+                if (confirm('Editar o texto reiniciará seu progresso. Continuar?')) {
+                    clearProgress();
+                    textInput.value = originalText;
+                    updateSentenceCounter();
+                    showScreen(screenInput);
+                }
+            });
+
+            btnResetTraining.addEventListener('click', () => {
+                if (confirm('Reiniciar o treino atual? Manterá texto e método.')) {
+                    resetTrainingState();
+                    showToast('Treino reiniciado.');
+                }
+            });
+
+            btnRestart.addEventListener('click', () => {
+                clearProgress();
+                textInput.value = originalText || '';
+                updateSentenceCounter();
+                showScreen(screenInput);
+            });
+
+            // teclas de atalho
+            document.addEventListener('keydown', (e) => {
+                if (screenPlay.classList.contains('hidden')) return;
+                if (e.code === 'Space' || e.code === 'ArrowRight') {
+                    e.preventDefault();
+                    handleNext();
+                } else if (e.code === 'ArrowLeft') {
+                    e.preventDefault();
+                    handlePrev();
+                } else if (e.key === 'r' || e.key === 'R') {
+                    e.preventDefault();
+                    if (confirm('Reiniciar o treino atual?')) {
+                        resetTrainingState();
+                        showToast('Treino reiniciado.');
+                    }
+                }
+            });
+
+            // modal de retomada
+            function checkResume() {
+                const saved = loadProgress();
+                if (saved && saved.text && saved.method && saved.sentences) {
+                    // dados antigos podem não ter sentences, precisamos parsear
+                }
+                if (saved && saved.text && saved.method) {
+                    resumeModal.classList.remove('hidden');
+                    resumeYes.focus();
+                } else {
+                    // sem dados, apenas exibe input
+                    showScreen(screenInput);
+                    textInput.focus();
+                }
+            }
+
+            resumeYes.addEventListener('click', () => {
+                const saved = loadProgress();
+                if (!saved) {
+                    resumeModal.classList.add('hidden');
+                    showScreen(screenInput);
+                    return;
+                }
+                sentences = parseSentences(saved.text);
+                if (sentences.length < 2) {
+                    clearProgress();
+                    resumeModal.classList.add('hidden');
+                    showScreen(screenInput);
+                    textInput.value = saved.text;
+                    updateSentenceCounter();
+                    return;
+                }
+                originalText = saved.text;
+                textInput.value = saved.text;
+                method = saved.method;
+                currentLevel = saved.currentLevel;
+                currentIndexWithinLevel = saved.method === 'serial' ? (saved.currentIndexWithinLevel || 0) : 0;
+                resumeModal.classList.add('hidden');
+                showScreen(screenPlay);
+                renderCard();
+                lucide.createIcons();
+            });
+
+            resumeNo.addEventListener('click', () => {
+                clearProgress();
+                resumeModal.classList.add('hidden');
+                showScreen(screenInput);
+                textInput.focus();
+            });
+
+            // inicialização
+            window.addEventListener('DOMContentLoaded', () => {
+                updateSentenceCounter();
+                checkResume();
+                lucide.createIcons();
+                if (screenInput.classList.contains('hidden') === false) {
+                    textInput.focus();
+                }
+            });
+
+            // ao fechar modal por clique fora (não implementado para simplicidade)
+        })();
+    </script>
+</body>
+</html>
