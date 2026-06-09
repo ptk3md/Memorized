@@ -129,7 +129,7 @@ handlePrev()                  — retrocede
 ]
 ```
 
-**Compatibilidade obrigatória:** dados sem `createdAt`/`updatedAt` devem continuar funcionando. Sempre usar `?? fallback` ao ler campos novos.
+**Compatibilidade obrigatória:** dados sem `createdAt`/`updatedAt` devem continuar funcionando. Sempre usar `?? fallback` ao ler campos novos. O campo `savedAt` (ISO string) é gravado em novos textos para a data relativa.
 
 **Funções de persistência:**
 ```
@@ -141,6 +141,22 @@ deleteTextFromLibrary(id)
 saveProgressForCurrentText()
 clearProgressForCurrentText()
 ```
+
+### Configurações (chave separada)
+
+**Chave:** `memorizador-settings` — **independente** de `memorizador-texts`.
+
+```js
+{
+  font: 'atkinson' | 'dyslexic' | 'opensans',  // seletor de fonte
+  zen: boolean                                  // modo zen
+}
+```
+
+- Acessadas via `loadSettings()` / `saveSettings()` / `applySettings()`.
+- **Fonte:** aplicada sobrescrevendo a variável CSS `--font-family` em `document.documentElement` (body e cartão já usam `var(--font-family)`). Fontes carregadas por `<link>` no `<head>`: Open Sans (Google Fonts), OpenDyslexic (cdnfonts); Atkinson via `@import` em style.css.
+- **Modo Zen:** classe `body.zen-mode` oculta elementos marcados com `.zen-hide` (chrome não-essencial da tela de estudo). Mantidos sempre: barra de progresso + `#progress-pct`, cartão, `#btn-next`, `#btn-back-play`.
+- Modal: `#settings-modal`, aberto pela engrenagem `#btn-settings` da navbar. Os atalhos de teclado vivem aqui como ajuda (a legenda fixa foi removida da tela de estudo).
 
 ---
 

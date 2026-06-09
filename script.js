@@ -53,6 +53,14 @@
     const deleteModalCancel = document.getElementById('delete-modal-cancel');
     const deleteModalConfirm = document.getElementById('delete-modal-confirm');
 
+    const titleInput = document.getElementById('title-input');
+    const btnBackPlay = document.getElementById('btn-back-play');
+    const btnSettings = document.getElementById('btn-settings');
+    const settingsModal = document.getElementById('settings-modal');
+    const btnCloseSettings = document.getElementById('btn-close-settings');
+    const fontOptions = document.querySelectorAll('.font-option');
+    const zenToggle = document.getElementById('zen-toggle');
+
     // ---------- estado da aplicação ----------
     let sentences = [];
     let method = null;
@@ -65,7 +73,45 @@
     let isEditing = false;      // se estamos editando um texto existente
 
     const STORAGE_KEY = 'memorizador-texts';
+    const SETTINGS_KEY = 'memorizador-settings';
     const WINDOW_SIZE = 4;
+
+    // ---------- configurações (fonte + modo zen) ----------
+    const FONT_MAP = {
+        atkinson: "'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        dyslexic: "'OpenDyslexic', 'Comic Sans MS', sans-serif",
+        opensans: "'Open Sans', system-ui, -apple-system, sans-serif"
+    };
+    let settings = { font: 'atkinson', zen: false };
+
+    function loadSettings() {
+        try {
+            const raw = localStorage.getItem(SETTINGS_KEY);
+            const parsed = raw ? JSON.parse(raw) : {};
+            settings = {
+                font: FONT_MAP[parsed.font] ? parsed.font : 'atkinson',
+                zen: !!parsed.zen
+            };
+        } catch {
+            settings = { font: 'atkinson', zen: false };
+        }
+    }
+
+    function saveSettings() {
+        try {
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        } catch (e) { /* ignora falha de quota; configurações não são críticas */ }
+    }
+
+    function applySettings() {
+        // Fonte: resolve via a variável CSS --font-family (body e cartão já a usam)
+        document.documentElement.style.setProperty('--font-family', FONT_MAP[settings.font] || FONT_MAP.atkinson);
+        // Modo Zen: classe no body controla a visibilidade do chrome não-essencial
+        document.body.classList.toggle('zen-mode', settings.zen);
+        // Reflete o estado nos controles do modal de configurações
+        fontOptions.forEach(opt => opt.classList.toggle('selected', opt.dataset.font === settings.font));
+        if (zenToggle) zenToggle.setAttribute('aria-checked', settings.zen ? 'true' : 'false');
+    }
 
     // ---------- utilidades ----------
     function showToast(msg, type) {
@@ -445,6 +491,7 @@
         if (!text) return;
         isEditing = true;
         currentTextId = id;
+        titleInput.value = text.title || '';
         textInput.value = text.content;
         updateSentenceCounter();
         showScreen(screenInput);
@@ -457,6 +504,7 @@
         isEditing = false;
         currentTextId = null;
         textInput.value = '';
+        titleInput.value = '';
         updateSentenceCounter();
         showScreen(screenInput);
     }
@@ -479,8 +527,8 @@
         originalText = textInput.value;
         originalTextHash = generateTextHash(originalText);
 
-        let title = prompt('Dê um título para este texto (opcional):');
-        if (!title || title.trim() === '') {
+        let title = (titleInput.value || '').trim();
+        if (title === '') {
             title = originalText.slice(0, 50).replace(/\s+/g, ' ').trim() + (originalText.length > 50 ? '…' : '');
         }
 
@@ -613,9 +661,13 @@
     }
 
     function renderCard() {
-        cardContent.parentElement.classList.remove('animate-entrance');
-        void cardContent.parentElement.offsetWidth;
-        cardContent.parentElement.classList.add('animate-entrance');
+        const card = cardContent.parentElement;
+        card.classList.remove('animate-entrance');
+        void card.offsetWidth;
+        card.classList.add('animate-entrance');
+
+        // Ajuste visual: marca o modo no cartão para o CSS (layout do Micro Escadas)
+        card.setAttribute('data-mode', method || '');
 
         if (method === 'block') {
             renderBlockMode();
@@ -629,6 +681,14 @@
         if (progressPct) {
             const w = parseFloat(progressBarFill.style.width) || 0;
             progressPct.textContent = Math.round(w) + '%';
+        }
+
+        // "Page up" suave: ao trocar de frase, volta ao topo do cartão
+        // (no modo clássico a nova frase entra embaixo; o usuário relê do início)
+        if (card.scrollTo) {
+            card.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            card.scrollTop = 0;
         }
     }
 
@@ -783,6 +843,8 @@
                     closeFullTextModal();
                 } else if (modalElement === deleteModal) {
                     closeConfirmModal();
+                } else if (modalElement === settingsModal) {
+                    closeSettingsModal();
                 }
             }
         }
@@ -859,10 +921,58 @@
         renderLibrary();
     });
 
+    // ---------- botão voltar na tela de estudo ----------
+    // Progresso é salvo continuamente, então sair a qualquer momento é seguro.
+    btnBackPlay.addEventListener('click', () => {
+        showScreen(screenLibrary);
+        renderLibrary();
+    });
+
+    // ---------- modal de configurações ----------
+    function openSettingsModal() {
+        applySettings(); // garante que os controles reflitam o estado salvo
+        settingsModal.classList.remove('hidden');
+        trapFocus(settingsModal);
+        btnCloseSettings.focus();
+        lucide.createIcons();
+    }
+
+    function closeSettingsModal() {
+        settingsModal.classList.add('hidden');
+        removeTrap(settingsModal);
+        btnSettings.focus();
+    }
+
+    if (btnSettings) btnSettings.addEventListener('click', openSettingsModal);
+    if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeSettingsModal);
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) closeSettingsModal();
+    });
+
+    fontOptions.forEach(opt => {
+        opt.addEventListener('click', () => {
+            settings.font = opt.dataset.font;
+            saveSettings();
+            applySettings();
+        });
+    });
+
+    if (zenToggle) {
+        zenToggle.addEventListener('click', () => {
+            settings.zen = !settings.zen;
+            saveSettings();
+            applySettings();
+        });
+    }
+
     // ---------- teclas de atalho ----------
     document.addEventListener('keydown', (e) => {
         // Escape: fechar modal ou voltar tela
         if (e.key === 'Escape') {
+            if (!settingsModal.classList.contains('hidden')) {
+                closeSettingsModal();
+                return;
+            }
             if (!deleteModal.classList.contains('hidden')) {
                 closeConfirmModal();
                 return;
@@ -882,7 +992,8 @@
         if (screenPlay.classList.contains('hidden')) return;
         if (!resumeModal.classList.contains('hidden') ||
             !fulltextModal.classList.contains('hidden') ||
-            !deleteModal.classList.contains('hidden')) return;
+            !deleteModal.classList.contains('hidden') ||
+            !settingsModal.classList.contains('hidden')) return;
 
         if (e.code === 'Space' || e.code === 'ArrowRight') {
             e.preventDefault();
@@ -911,6 +1022,8 @@
 
     // ---------- inicialização ----------
     window.addEventListener('DOMContentLoaded', () => {
+        loadSettings();
+        applySettings(); // fonte + modo zen valem desde a carga
         renderLibrary();
         lucide.createIcons();
     });

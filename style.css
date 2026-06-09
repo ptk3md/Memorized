@@ -190,7 +190,7 @@ textarea:focus-visible,
     width: 100%;
     max-width: var(--card-max-width);
     color: var(--text-fg);
-    font-size: var(--font-size-regular);
+    font-size: clamp(1rem, 4vw, 1.5rem); /* responsivo: nunca grande demais no mobile */
     line-height: var(--line-height);
     text-align: var(--card-text-align);
     overflow-wrap: anywhere;
@@ -198,6 +198,23 @@ textarea:focus-visible,
     max-height: 60vh;
     overflow-y: auto;
     scroll-behavior: smooth;
+}
+
+/* ========== MODO MICRO ESCADAS: 4 blocos integrais sem scroll ========== */
+.prettify-flashcard[data-mode="sliding"] {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.4em;
+    max-height: calc(100vh - 320px); /* ocupa a área disponível da tela */
+    height: auto;
+}
+.prettify-flashcard[data-mode="sliding"] > .prettify-field {
+    display: contents; /* permite que os <p> participem do flex do cartão */
+}
+.prettify-flashcard[data-mode="sliding"] .prettify-field p {
+    margin-bottom: 0;
+    overflow: hidden; /* scroll só no cartão, quando um parágrafo for muito longo */
 }
 
 .prettify-field .current-block-phrase {
@@ -783,14 +800,10 @@ sub.custom-math {
 @media (max-width: 480px) {
     .prettify-flashcard {
         padding: 16px;
-        font-size: 18px;
+        /* font-size controlado por clamp() — sem override fixo */
     }
     .method-option {
         padding: 12px;
-    }
-    .shortcuts-legend {
-        font-size: 9px;
-        gap: 8px;
     }
     .lib-card__actions {
         gap: 4px;
@@ -810,4 +823,153 @@ sub.custom-math {
         padding-left: 24px;
         padding-right: 24px;
     }
+}
+
+/* ========== INPUT DE TÍTULO (tela de entrada) ========== */
+.title-input {
+    background-color: #222222;
+    border: 1px solid #333333;
+    color: var(--text-fg);
+    font-family: var(--font-family);
+    transition: border-color 0.15s ease;
+}
+.title-input::placeholder {
+    color: #6c6864;
+}
+.title-input:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+/* ========== BOTÃO VOLTAR (tela de estudo) ========== */
+.btn-back-play {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color 0.15s ease;
+    align-self: flex-start;
+    padding: 2px 0;
+}
+.btn-back-play:hover {
+    color: var(--text-fg) !important;
+}
+
+/* ========== MODAL DE CONFIGURAÇÕES ========== */
+.settings-section {
+    border-top: 1px solid #2e2e2e;
+    padding-top: 14px;
+}
+.settings-section:first-of-type {
+    border-top: none;
+    padding-top: 0;
+}
+.settings-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-fg-faint);
+    margin-bottom: 10px;
+}
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+/* Opção de fonte */
+.font-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: #222222;
+    border: 1px solid #333333;
+    border-radius: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-fg);
+    font-size: 14px;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.font-option:hover {
+    border-color: #555;
+}
+.font-option.selected {
+    border-color: var(--accent);
+    background-color: #2a2624;
+    box-shadow: 0 0 0 1px var(--accent), 0 4px 16px var(--accent-glow);
+}
+.font-option__check {
+    display: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #fff;
+}
+.font-option.selected .font-option__check {
+    display: flex;
+}
+
+/* Toggle do Modo Zen */
+.zen-switch {
+    position: relative;
+    width: 46px;
+    height: 26px;
+    border-radius: 20px;
+    background: #3a3a3a;
+    border: 1px solid #4a4a4a;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    padding: 0;
+}
+.zen-switch__knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #f5f5f5;
+    transition: transform 0.2s var(--anim-curve);
+}
+.zen-switch[aria-checked="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.zen-switch[aria-checked="true"] .zen-switch__knob {
+    transform: translateX(20px);
+}
+
+/* Ajuda de atalhos dentro das configurações */
+.shortcuts-help {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.shortcuts-help kbd {
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: inherit;
+    color: #bbb;
+    margin-right: 2px;
+}
+
+/* ========== MODO ZEN ========== */
+body.zen-mode .zen-hide {
+    display: none !important;
+}
+/* No modo zen o cartão ganha mais respiro vertical */
+body.zen-mode .prettify-flashcard {
+    max-height: 70vh;
 }

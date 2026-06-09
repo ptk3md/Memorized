@@ -6,6 +6,11 @@
     <title>Memorizador</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Fontes alternativas para o seletor de fonte (Atkinson vem do @import em style.css) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.cdnfonts.com/css/opendyslexic" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="h-full flex flex-col">
@@ -52,6 +57,9 @@
                     <i data-lucide="arrow-left" class="w-3 h-3"></i> Biblioteca
                 </button>
             </div>
+            <input id="title-input" type="text" maxlength="80"
+                class="title-input w-full rounded-lg p-3 text-sm"
+                placeholder="Título do texto (opcional)" aria-label="Título do texto" />
             <textarea id="text-input"
                 placeholder="Cole aqui o texto que você quer memorizar. O app vai dividir automaticamente em frases para o treino progressivo."
                 aria-label="Texto para memorizar"
@@ -132,17 +140,20 @@
     <!-- ========== TELA 3: MEMORIZAÇÃO ========== -->
     <div id="screen-play" class="hidden flex-1 flex flex-col justify-between p-6">
         <div class="space-y-2">
+            <button id="btn-back-play" class="btn-back-play flex items-center gap-1 text-xs uppercase tracking-widest font-bold mb-1" style="color: var(--text-fg-faint);" aria-label="Voltar para biblioteca">
+                <i data-lucide="arrow-left" class="w-3 h-3"></i> Biblioteca
+            </button>
             <div class="flex justify-between items-center text-xs" style="color: var(--text-fg-faint);">
-                <span id="level-indicator">Nível 1 de 1</span>
+                <span id="level-indicator" class="zen-hide">Nível 1 de 1</span>
                 <div class="flex items-center gap-2">
                     <span id="progress-pct" class="text-xs font-bold" style="color:var(--text-fg);">0%</span>
-                    <span id="mode-badge">Bloco</span>
+                    <span id="mode-badge" class="zen-hide">Bloco</span>
                 </div>
             </div>
             <div class="progress-bar-bg">
                 <div id="progress-bar-fill" class="progress-bar-fill" style="width:0%;"></div>
             </div>
-            <div id="context-indicator" class="text-xs mt-1" style="color: var(--text-fg-faint);"></div>
+            <div id="context-indicator" class="text-xs mt-1 zen-hide" style="color: var(--text-fg-faint);"></div>
         </div>
 
         <div class="flex-1 flex items-center justify-center py-4">
@@ -152,12 +163,12 @@
         </div>
 
         <div class="space-y-3">
-            <p id="recitation-hint" class="text-xs text-center" style="color: var(--text-fg-faint);"></p>
+            <p id="recitation-hint" class="text-xs text-center zen-hide" style="color: var(--text-fg-faint);"></p>
             <button id="btn-next" class="w-full h-14 btn-claude-primary btn-ripple font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Próximo passo">
                 <span>Próxima</span>
                 <i data-lucide="chevron-right" class="w-4 h-4"></i>
             </button>
-            <div class="flex justify-between items-center px-1">
+            <div class="flex justify-between items-center px-1 zen-hide">
                 <button id="btn-prev" class="text-xs uppercase tracking-widest font-bold py-2 transition-colors disabled:opacity-20 flex items-center gap-1" style="color: var(--text-fg-faint);" aria-label="Voltar">
                     <i data-lucide="chevron-left" class="w-3 h-3"></i> Voltar
                 </button>
@@ -170,12 +181,6 @@
                 <button id="btn-view-full-text" class="text-xs uppercase tracking-widest font-bold py-2 transition-colors flex items-center gap-1" style="color: var(--text-fg-faint);" aria-label="Ver texto completo">
                     <i data-lucide="book-open" class="w-3 h-3"></i> Texto
                 </button>
-            </div>
-            <div class="shortcuts-legend pt-1">
-                <span><kbd>→</kbd> ou <kbd>Espaço</kbd> Avançar</span>
-                <span><kbd>←</kbd> Voltar</span>
-                <span><kbd>R</kbd> Reiniciar</span>
-                <span><kbd>B</kbd> Biblioteca</span>
             </div>
         </div>
     </div>
@@ -244,6 +249,62 @@
                 <button id="delete-modal-confirm" class="px-4 py-2 rounded text-xs uppercase tracking-wider font-bold" style="background:#c62828; color:#fff;" aria-label="Confirmar ação">
                     Confirmar
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== MODAL DE CONFIGURAÇÕES ========== -->
+    <div id="settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="modal-content space-y-5">
+            <div class="flex justify-between items-center">
+                <p id="settings-title" class="font-bold text-sm">Configurações</p>
+                <button id="btn-close-settings" class="text-xs uppercase tracking-wider p-1 hover:text-white transition" style="color:var(--text-fg-faint);" aria-label="Fechar configurações">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Seletor de fonte -->
+            <div class="settings-section">
+                <p class="settings-label">Fonte do aplicativo</p>
+                <div class="space-y-2">
+                    <button class="font-option" data-font="atkinson" aria-label="Usar fonte Atkinson Hyperlegible">
+                        <span style="font-family:'Atkinson Hyperlegible', sans-serif;">Atkinson Hyperlegible</span>
+                        <span class="font-option__check" aria-hidden="true"><i data-lucide="check" class="w-3 h-3"></i></span>
+                    </button>
+                    <button class="font-option" data-font="dyslexic" aria-label="Usar fonte OpenDyslexic">
+                        <span style="font-family:'OpenDyslexic', sans-serif;">OpenDyslexic</span>
+                        <span class="font-option__check" aria-hidden="true"><i data-lucide="check" class="w-3 h-3"></i></span>
+                    </button>
+                    <button class="font-option" data-font="opensans" aria-label="Usar fonte Open Sans">
+                        <span style="font-family:'Open Sans', sans-serif;">Open Sans</span>
+                        <span class="font-option__check" aria-hidden="true"><i data-lucide="check" class="w-3 h-3"></i></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modo Zen -->
+            <div class="settings-section">
+                <div class="settings-row">
+                    <div>
+                        <p class="settings-label" style="margin:0;">Modo Zen</p>
+                        <p class="text-xs" style="color:var(--text-fg-faint);">Interface enxuta: só progresso e texto.</p>
+                    </div>
+                    <button id="zen-toggle" class="zen-switch" role="switch" aria-checked="false" aria-label="Alternar Modo Zen">
+                        <span class="zen-switch__knob"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Ajuda de atalhos (opcional, não fixa na tela de estudo) -->
+            <div class="settings-section">
+                <p class="settings-label">Atalhos de teclado</p>
+                <div class="shortcuts-help text-xs" style="color:var(--text-fg-faint);">
+                    <span><kbd>→</kbd> / <kbd>Espaço</kbd> Avançar</span>
+                    <span><kbd>←</kbd> Voltar</span>
+                    <span><kbd>R</kbd> Reiniciar</span>
+                    <span><kbd>B</kbd> Biblioteca</span>
+                    <span><kbd>Esc</kbd> Fechar / Sair</span>
+                </div>
             </div>
         </div>
     </div>
