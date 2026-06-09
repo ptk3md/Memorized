@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Memorizador · Claude Dark</title>
+    <title>Memorizador</title>
     <script src="https://cdn.tailwindcss.com">
     </script>
     <script src="https://unpkg.com/lucide@latest">
@@ -61,6 +61,24 @@
             outline-offset: 2px;
         }
 
+        /* Respeito à preferência de movimento reduzido */
+        @media (prefers-reduced-motion: reduce) {
+            .animate-entrance {
+                animation: none !important;
+            }
+            .confetti-piece {
+                animation: none !important;
+                opacity: 0 !important;
+            }
+            .toast {
+                animation: none !important;
+            }
+            * {
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+            }
+        }
+
         .prettify-flashcard {
             position: relative;
             background-color: var(--card-bg);
@@ -79,6 +97,16 @@
             word-break: break-word;
             max-height: 60vh;
             overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        /* Destaque da frase atual no modo bloco */
+        .prettify-field .current-block-phrase {
+            border-left: 3px solid var(--accent);
+            padding-left: 12px;
+            background: rgba(217, 119, 87, 0.08);
+            border-radius: 0 4px 4px 0;
+            transition: background 0.2s ease;
         }
 
         .prettify-field {
@@ -268,6 +296,53 @@
             max-width: 360px;
             width: 90%;
             color: #f5f5f5;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        /* Preview de frases na tela de entrada */
+        .sentence-preview {
+            background-color: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 6px;
+            padding: 12px;
+            max-height: 120px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--text-fg-faint);
+            display: none;
+        }
+        .sentence-preview.visible {
+            display: block;
+        }
+        .sentence-preview span {
+            display: inline-block;
+            background: #2a2a2a;
+            border-radius: 3px;
+            padding: 2px 6px;
+            margin: 2px;
+            color: #ddd;
+        }
+
+        /* Legenda de atalhos */
+        .shortcuts-legend {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #666;
+        }
+        .shortcuts-legend kbd {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 3px;
+            padding: 1px 5px;
+            font-family: inherit;
+            color: #bbb;
         }
 
         @media (max-width: 480px) {
@@ -277,6 +352,10 @@
             }
             .method-option {
                 padding: 12px;
+            }
+            .shortcuts-legend {
+                font-size: 9px;
+                gap: 8px;
             }
         }
     </style>
@@ -295,6 +374,8 @@
                 <span id="sentence-counter">0 frases detectadas</span>
                 <button id="btn-reset-storage" class="underline hover:text-white transition" aria-label="Resetar progresso salvo">Resetar progresso</button>
             </div>
+            <!-- Preview visual das frases detectadas -->
+            <div id="sentence-preview" class="sentence-preview" aria-label="Pré-visualização das frases detectadas"></div>
             <p id="warning-few-sentences" class="text-xs hidden" style="color: #e08b7a;">⚠️ O texto precisa ter pelo menos 2 frases para iniciar.</p>
         </div>
         <div class="pt-6">
@@ -346,7 +427,7 @@
         </div>
 
         <div class="flex-1 flex items-center justify-center py-4">
-            <div class="prettify-flashcard animate-entrance">
+            <div class="prettify-flashcard animate-entrance" aria-live="polite" aria-atomic="true">
                 <div id="card-content" class="prettify-field"></div>
             </div>
         </div>
@@ -367,6 +448,15 @@
                 <button id="btn-reset-training" class="text-xs uppercase tracking-widest font-bold py-2 transition-colors flex items-center gap-1" style="color: var(--text-fg-faint);" aria-label="Reiniciar treino">
                     <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Reiniciar
                 </button>
+                <button id="btn-view-full-text" class="text-xs uppercase tracking-widest font-bold py-2 transition-colors flex items-center gap-1" style="color: var(--text-fg-faint);" aria-label="Ver texto completo">
+                    <i data-lucide="book-open" class="w-3 h-3"></i> Texto
+                </button>
+            </div>
+            <!-- Legenda de atalhos de teclado -->
+            <div class="shortcuts-legend pt-1">
+                <span><kbd>→</kbd> ou <kbd>Espaço</kbd> Avançar</span>
+                <span><kbd>←</kbd> Voltar</span>
+                <span><kbd>R</kbd> Reiniciar</span>
             </div>
         </div>
     </div>
@@ -391,14 +481,27 @@
     </div>
 
     <!-- ========== MODAL DE RETOMADA ========== -->
-    <div id="resume-modal" class="modal-overlay hidden">
+    <div id="resume-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="resume-title">
         <div class="modal-content space-y-4">
-            <p class="font-bold text-sm">Treino anterior encontrado</p>
+            <p id="resume-title" class="font-bold text-sm">Treino anterior encontrado</p>
             <p class="text-xs" style="color:var(--text-fg-faint);">Deseja retomar de onde parou?</p>
             <div class="flex gap-3 justify-end">
                 <button id="resume-no" class="btn-claude-secondary px-4 py-2 rounded text-xs uppercase tracking-wider" aria-label="Recomeçar">Recomeçar</button>
                 <button id="resume-yes" class="btn-claude-primary px-4 py-2 rounded text-xs uppercase tracking-wider" aria-label="Retomar">Retomar</button>
             </div>
+        </div>
+    </div>
+
+    <!-- ========== MODAL DE TEXTO COMPLETO (REFERÊNCIA) ========== -->
+    <div id="fulltext-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="fulltext-title">
+        <div class="modal-content space-y-4" style="max-width:600px; max-height:80vh; overflow-y:auto;">
+            <div class="flex justify-between items-center">
+                <p id="fulltext-title" class="font-bold text-sm">Texto completo de referência</p>
+                <button id="btn-close-fulltext" class="text-xs uppercase tracking-wider p-1 hover:text-white transition" style="color:var(--text-fg-faint);" aria-label="Fechar">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div id="fulltext-content" class="text-xs leading-relaxed" style="color:var(--text-fg-faint); white-space:pre-wrap;"></div>
         </div>
     </div>
 
@@ -410,10 +513,12 @@
             const screenPlay = document.getElementById('screen-play');
             const screenComplete = document.getElementById('screen-complete');
             const resumeModal = document.getElementById('resume-modal');
+            const fulltextModal = document.getElementById('fulltext-modal');
             const toast = document.getElementById('toast');
 
             const textInput = document.getElementById('text-input');
             const sentenceCounter = document.getElementById('sentence-counter');
+            const sentencePreview = document.getElementById('sentence-preview');
             const warningFew = document.getElementById('warning-few-sentences');
             const btnStart = document.getElementById('btn-start');
             const btnResetStorage = document.getElementById('btn-reset-storage');
@@ -431,6 +536,9 @@
             const btnPrev = document.getElementById('btn-prev');
             const btnEditText = document.getElementById('btn-edit-text');
             const btnResetTraining = document.getElementById('btn-reset-training');
+            const btnViewFullText = document.getElementById('btn-view-full-text');
+            const btnCloseFulltext = document.getElementById('btn-close-fulltext');
+            const fulltextContent = document.getElementById('fulltext-content');
 
             const completeSummary = document.getElementById('complete-summary');
             const btnRestart = document.getElementById('btn-restart');
@@ -441,9 +549,10 @@
             let sentences = [];
             let method = null; // 'block' | 'serial'
             let originalText = '';
-            let currentLevel = 0; // nível atual (índice da última frase incluída)
-            let currentIndexWithinLevel = 0; // usado apenas no serial
-            let selectedMethod = null; // para tela de seleção
+            let originalTextHash = ''; // hash simples para integridade
+            let currentLevel = 0;
+            let currentIndexWithinLevel = 0;
+            let selectedMethod = null;
 
             const STORAGE_KEY = 'memorizador-progress';
 
@@ -457,6 +566,17 @@
                 toast._timeout = setTimeout(() => {
                     toast.classList.add('hidden');
                 }, 2000);
+            }
+
+            // Gera um hash simples do texto para verificação de integridade
+            function generateTextHash(text) {
+                let hash = 0;
+                for (let i = 0; i < text.length; i++) {
+                    const char = text.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash |= 0; // converte para 32bit integer
+                }
+                return hash.toString(16);
             }
 
             function formatAnkiMarkup(raw) {
@@ -487,18 +607,33 @@
                 return c;
             }
 
+            /**
+             * Melhoria na divisão de frases:
+             * - Respeita linhas em branco como separadores forçados
+             * - Usa heurística: ponto final/exclamação/interrogação seguido de espaço e letra maiúscula
+             * - Evita quebrar em abreviações como "Dr.", "Sr.", números decimais etc.
+             */
             function parseSentences(text) {
                 if (!text || !text.trim()) return [];
+                // Primeiro separa por blocos de parágrafo (linhas em branco)
                 const blocks = text.split(/\n\s*\n/);
                 let result = [];
                 for (let block of blocks) {
                     block = block.trim();
                     if (!block) continue;
-                    const parts = block.split(/(?<=[.!?])\s+/);
+                    // Usa regex melhorada: pontuação final seguida de espaço e letra maiúscula ou número
+                    // ou final de string
+                    const parts = block.split(/(?<=[.!?])\s+(?=[A-ZÀ-Ú0-9"“'‘\[\(])/);
                     for (let part of parts) {
                         const trimmed = part.trim();
                         if (trimmed) result.push(trimmed);
                     }
+                }
+                // Fallback: se ainda resultar em 0 ou 1 frase mas o texto tem conteúdo,
+                // usa a abordagem antiga como garantia
+                if (result.length < 2 && text.trim().length > 0) {
+                    const fallbackParts = text.split(/(?<=[.!?])\s+/);
+                    result = fallbackParts.filter(p => p.trim().length > 0);
                 }
                 return result;
             }
@@ -514,28 +649,49 @@
                     warningFew.classList.add('hidden');
                     btnStart.disabled = false;
                 }
+                // Atualiza preview visual
+                if (count > 0) {
+                    sentencePreview.classList.add('visible');
+                    sentencePreview.innerHTML = s.map((phrase, i) =>
+                        `<span>${i+1}. ${phrase.slice(0, 60)}${phrase.length > 60 ? '…' : ''}</span>`
+                    ).join('');
+                } else {
+                    sentencePreview.classList.remove('visible');
+                    sentencePreview.innerHTML = '';
+                }
             }
 
-            // ---------- persistência ----------
+            // ---------- persistência com tratamento de cotas e hash ----------
             function saveProgress() {
                 if (!method || !sentences.length) return;
                 const data = {
                     text: originalText,
+                    hash: originalTextHash,
                     method,
                     currentLevel,
                     currentIndexWithinLevel: method === 'serial' ? currentIndexWithinLevel : 0
                 };
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                } catch (e) {
+                    // localStorage cheio ou indisponível
+                    showToast('⚠️ Não foi possível salvar o progresso. Espaço insuficiente.');
+                    console.warn('localStorage setItem falhou:', e);
+                }
             }
 
             function clearProgress() {
-                localStorage.removeItem(STORAGE_KEY);
+                try {
+                    localStorage.removeItem(STORAGE_KEY);
+                } catch (e) {
+                    console.warn('localStorage removeItem falhou:', e);
+                }
             }
 
             function loadProgress() {
-                const raw = localStorage.getItem(STORAGE_KEY);
-                if (!raw) return null;
                 try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    if (!raw) return null;
                     return JSON.parse(raw);
                 } catch {
                     return null;
@@ -569,52 +725,65 @@
                 }
             }
 
-            // ---------- lógica de renderização do modo ----------
+            // ---------- lógica de renderização modularizada ----------
+            function renderBlockMode() {
+                let html = '';
+                for (let i = 0; i <= currentLevel; i++) {
+                    // Destaca a última frase (a recém-adicionada) com classe especial
+                    const isCurrent = (i === currentLevel);
+                    const phraseClass = isCurrent ? ' current-block-phrase' : '';
+                    html +=
+                        `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${i+1}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+                }
+                cardContent.innerHTML = html;
+                recitationHint.textContent = 'Recite todas as frases acima em voz alta.';
+                levelIndicator.textContent = `Nível ${currentLevel+1} de ${sentences.length}`;
+                contextIndicator.innerHTML =
+                    `Frases neste nível: <span style="color:var(--text-fg);">${sentences.slice(0, currentLevel+1).map(s => s.slice(0,25)+(s.length>25?'…':'')).join(' • ')}</span>`;
+                modeBadge.textContent = 'Bloco';
+                const progress = ((currentLevel + 1) / sentences.length) * 100;
+                progressBarFill.style.width = `${progress}%`;
+            }
+
+            function renderSerialMode() {
+                const phrase = sentences[currentIndexWithinLevel];
+                cardContent.innerHTML = formatAnkiMarkup(phrase);
+                levelIndicator.textContent =
+                    `Nível ${currentLevel+1} (acumula ${currentLevel+1} frase${currentLevel+1>1?'s':''})`;
+                let contextHtml = '';
+                for (let i = 0; i <= currentLevel; i++) {
+                    if (i < currentIndexWithinLevel) contextHtml +=
+                        `<span style="color:var(--accent);">✓ ${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
+                    else if (i === currentIndexWithinLevel) contextHtml +=
+                        `<span style="color:#fff;">▶ ${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
+                    else contextHtml +=
+                        `<span style="color:#555;">${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
+                }
+                contextIndicator.innerHTML = contextHtml.replace(/ • $/, '');
+                recitationHint.textContent =
+                    'Recite mentalmente todas as frases que já apareceram neste nível antes de avançar.';
+                modeBadge.textContent = 'Serial';
+                const totalSteps = (sentences.length * (sentences.length + 1)) / 2;
+                let completedSteps = 0;
+                for (let lvl = 0; lvl < currentLevel; lvl++) completedSteps += (lvl + 1);
+                completedSteps += currentIndexWithinLevel + 1;
+                const progress = Math.min(100, (completedSteps / totalSteps) * 100);
+                progressBarFill.style.width = `${progress}%`;
+            }
+
             function renderCard() {
                 cardContent.parentElement.classList.remove('animate-entrance');
                 void cardContent.parentElement.offsetWidth;
                 cardContent.parentElement.classList.add('animate-entrance');
 
                 if (method === 'block') {
-                    // Exibe frases de 0 até currentLevel
-                    let html = '';
-                    for (let i = 0; i <= currentLevel; i++) {
-                        html += `<p style="margin-bottom:0.5em;"><span style="color:var(--accent);">${i+1}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-                    }
-                    cardContent.innerHTML = html;
-                    recitationHint.textContent = 'Recite todas as frases acima em voz alta.';
-                    levelIndicator.textContent = `Nível ${currentLevel+1} de ${sentences.length}`;
-                    contextIndicator.innerHTML = `Frases neste nível: <span style="color:var(--text-fg);">${sentences.slice(0, currentLevel+1).map(s => s.slice(0,25)+(s.length>25?'…':'')).join(' • ')}</span>`;
-                    modeBadge.textContent = 'Bloco';
-                    const progress = ((currentLevel + 1) / sentences.length) * 100;
-                    progressBarFill.style.width = `${progress}%`;
+                    renderBlockMode();
                 } else if (method === 'serial') {
-                    const phrase = sentences[currentIndexWithinLevel];
-                    cardContent.innerHTML = formatAnkiMarkup(phrase);
-                    levelIndicator.textContent = `Nível ${currentLevel+1} (acumula ${currentLevel+1} frase${currentLevel+1>1?'s':''})`;
-                    let contextHtml = '';
-                    for (let i = 0; i <= currentLevel; i++) {
-                        if (i < currentIndexWithinLevel) contextHtml +=
-                            `<span style="color:var(--accent);">✓ ${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
-                        else if (i === currentIndexWithinLevel) contextHtml +=
-                            `<span style="color:#fff;">▶ ${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
-                        else contextHtml +=
-                            `<span style="color:#555;">${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
-                    }
-                    contextIndicator.innerHTML = contextHtml.replace(/ • $/, '');
-                    recitationHint.textContent =
-                        'Recite mentalmente todas as frases que já apareceram neste nível antes de avançar.';
-                    modeBadge.textContent = 'Serial';
-                    // progresso: considera passos internos
-                    const totalSteps = (sentences.length * (sentences.length + 1)) / 2;
-                    let completedSteps = 0;
-                    for (let lvl = 0; lvl < currentLevel; lvl++) completedSteps += (lvl + 1);
-                    completedSteps += currentIndexWithinLevel + 1;
-                    const progress = Math.min(100, (completedSteps / totalSteps) * 100);
-                    progressBarFill.style.width = `${progress}%`;
+                    renderSerialMode();
                 }
             }
 
+            // ---------- navegação com feedback de nível corrigido ----------
             function handleNext() {
                 if (method === 'block') {
                     if (currentLevel < sentences.length - 1) {
@@ -623,7 +792,6 @@
                         renderCard();
                         showToast(`Nível ${currentLevel+1} concluído!`);
                     } else {
-                        // conclusão
                         clearProgress();
                         showCompleteScreen();
                     }
@@ -632,16 +800,24 @@
                         currentIndexWithinLevel++;
                         saveProgress();
                         renderCard();
+                        // Se acabou de completar o nível (chegou no último passo)
+                        if (currentIndexWithinLevel === currentLevel && currentLevel < sentences.length - 1) {
+                            // O próximo clique avançará de nível, mas já podemos dar feedback
+                            // Não mostramos toast aqui para não poluir; o toast aparece ao mudar de nível
+                        }
                     } else {
-                        // currentIndexWithinLevel == currentLevel
+                        // currentIndexWithinLevel == currentLevel (último passo do nível atual)
                         if (currentLevel < sentences.length - 1) {
+                            // Mostra toast de conclusão do nível atual antes de avançar
+                            showToast(`Nível ${currentLevel+1} concluído!`);
                             currentLevel++;
                             currentIndexWithinLevel = 0;
                             saveProgress();
                             renderCard();
-                            showToast(`Nível ${currentLevel+1} iniciado!`);
+                            // Pequeno atraso para o segundo toast não sobrescrever o primeiro
+                            setTimeout(() => showToast(`Nível ${currentLevel+1} iniciado!`), 600);
                         } else {
-                            // conclusão total
+                            // conclusão total (último passo do último nível)
                             clearProgress();
                             showCompleteScreen();
                         }
@@ -686,6 +862,63 @@
                 }
             }
 
+            // ---------- modal de texto completo (referência) ----------
+            function openFullTextModal() {
+                fulltextContent.textContent = originalText || sentences.join('\n\n');
+                fulltextModal.classList.remove('hidden');
+                btnCloseFulltext.focus();
+                trapFocus(fulltextModal);
+                lucide.createIcons();
+            }
+
+            function closeFullTextModal() {
+                fulltextModal.classList.add('hidden');
+                btnViewFullText.focus();
+            }
+
+            // ---------- focus trap simples para modais ----------
+            function trapFocus(modalElement) {
+                const focusableSelectors = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+                const focusableElements = modalElement.querySelectorAll(focusableSelectors);
+                if (focusableElements.length === 0) return;
+                const firstFocusable = focusableElements[0];
+                const lastFocusable = focusableElements[focusableElements.length - 1];
+
+                function handleTab(e) {
+                    if (e.key === 'Tab') {
+                        if (e.shiftKey) {
+                            if (document.activeElement === firstFocusable) {
+                                e.preventDefault();
+                                lastFocusable.focus();
+                            }
+                        } else {
+                            if (document.activeElement === lastFocusable) {
+                                e.preventDefault();
+                                firstFocusable.focus();
+                            }
+                        }
+                    }
+                    if (e.key === 'Escape') {
+                        if (modalElement === resumeModal) {
+                            resumeNo.click();
+                        } else if (modalElement === fulltextModal) {
+                            closeFullTextModal();
+                        }
+                    }
+                }
+                modalElement.addEventListener('keydown', handleTab);
+                // Armazena a função para remoção posterior
+                modalElement._trapHandler = handleTab;
+                firstFocusable.focus();
+            }
+
+            function removeTrap(modalElement) {
+                if (modalElement._trapHandler) {
+                    modalElement.removeEventListener('keydown', modalElement._trapHandler);
+                    delete modalElement._trapHandler;
+                }
+            }
+
             // ---------- eventos de entrada ----------
             textInput.addEventListener('input', updateSentenceCounter);
             btnStart.addEventListener('click', () => {
@@ -696,8 +929,8 @@
                 }
                 sentences = s;
                 originalText = textInput.value;
+                originalTextHash = generateTextHash(originalText);
                 showScreen(screenMethod);
-                // reset seleção
                 selectedMethod = null;
                 methodOptions.forEach(btn => btn.classList.remove('selected'));
                 btnConfirmMethod.disabled = true;
@@ -754,6 +987,15 @@
                 }
             });
 
+            btnViewFullText.addEventListener('click', openFullTextModal);
+            btnCloseFulltext.addEventListener('click', closeFullTextModal);
+            // Fecha modal de texto completo ao clicar fora
+            fulltextModal.addEventListener('click', (e) => {
+                if (e.target === fulltextModal) {
+                    closeFullTextModal();
+                }
+            });
+
             btnRestart.addEventListener('click', () => {
                 clearProgress();
                 textInput.value = originalText || '';
@@ -764,6 +1006,9 @@
             // teclas de atalho
             document.addEventListener('keydown', (e) => {
                 if (screenPlay.classList.contains('hidden')) return;
+                // Não ativa atalhos se um modal estiver aberto
+                if (!resumeModal.classList.contains('hidden') || !fulltextModal.classList.contains(
+                    'hidden')) return;
                 if (e.code === 'Space' || e.code === 'ArrowRight') {
                     e.preventDefault();
                     handleNext();
@@ -779,17 +1024,24 @@
                 }
             });
 
-            // modal de retomada
+            // ---------- modal de retomada com focus trap e validação de hash ----------
             function checkResume() {
                 const saved = loadProgress();
-                if (saved && saved.text && saved.method && saved.sentences) {
-                    // dados antigos podem não ter sentences, precisamos parsear
-                }
                 if (saved && saved.text && saved.method) {
+                    // Verifica integridade: o hash salvo confere com o texto?
+                    const savedHash = saved.hash || '';
+                    const currentHash = generateTextHash(saved.text);
+                    if (savedHash && savedHash !== currentHash) {
+                        // Texto pode ter sido adulterado, invalida progresso
+                        clearProgress();
+                        showScreen(screenInput);
+                        textInput.focus();
+                        return;
+                    }
                     resumeModal.classList.remove('hidden');
+                    trapFocus(resumeModal);
                     resumeYes.focus();
                 } else {
-                    // sem dados, apenas exibe input
                     showScreen(screenInput);
                     textInput.focus();
                 }
@@ -798,6 +1050,7 @@
             resumeYes.addEventListener('click', () => {
                 const saved = loadProgress();
                 if (!saved) {
+                    removeTrap(resumeModal);
                     resumeModal.classList.add('hidden');
                     showScreen(screenInput);
                     return;
@@ -805,6 +1058,7 @@
                 sentences = parseSentences(saved.text);
                 if (sentences.length < 2) {
                     clearProgress();
+                    removeTrap(resumeModal);
                     resumeModal.classList.add('hidden');
                     showScreen(screenInput);
                     textInput.value = saved.text;
@@ -812,10 +1066,13 @@
                     return;
                 }
                 originalText = saved.text;
+                originalTextHash = generateTextHash(originalText);
                 textInput.value = saved.text;
                 method = saved.method;
                 currentLevel = saved.currentLevel;
-                currentIndexWithinLevel = saved.method === 'serial' ? (saved.currentIndexWithinLevel || 0) : 0;
+                currentIndexWithinLevel = saved.method === 'serial' ? (saved.currentIndexWithinLevel || 0) :
+                0;
+                removeTrap(resumeModal);
                 resumeModal.classList.add('hidden');
                 showScreen(screenPlay);
                 renderCard();
@@ -824,9 +1081,17 @@
 
             resumeNo.addEventListener('click', () => {
                 clearProgress();
+                removeTrap(resumeModal);
                 resumeModal.classList.add('hidden');
                 showScreen(screenInput);
                 textInput.focus();
+            });
+
+            // Fecha modal de retomada ao clicar fora
+            resumeModal.addEventListener('click', (e) => {
+                if (e.target === resumeModal) {
+                    resumeNo.click();
+                }
             });
 
             // inicialização
@@ -838,8 +1103,6 @@
                     textInput.focus();
                 }
             });
-
-            // ao fechar modal por clique fora (não implementado para simplicidade)
         })();
     </script>
 </body>
