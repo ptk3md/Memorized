@@ -23,12 +23,6 @@
         </button>
     </nav>
 
-    <!-- Toast container -->
-    <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden bg-[#333] text-white px-5 py-2 rounded-full text-sm font-medium shadow-lg toast" aria-live="polite" aria-atomic="true">
-        <span id="toast-icon" aria-hidden="true"></span>
-        <span id="toast-msg"></span>
-    </div>
-
     <!-- ========== TELA 0: BIBLIOTECA ========== -->
     <div id="screen-library" class="flex-1 flex flex-col p-6">
         <div class="flex justify-between items-center mb-4">
@@ -145,10 +139,7 @@
             </button>
             <div class="flex justify-between items-center text-xs" style="color: var(--text-fg-faint);">
                 <span id="level-indicator" class="zen-hide">Nível 1 de 1</span>
-                <div class="flex items-center gap-2">
-                    <span id="progress-pct" class="text-xs font-bold" style="color:var(--text-fg);">0%</span>
-                    <span id="mode-badge" class="zen-hide">Bloco</span>
-                </div>
+                <span id="mode-badge" class="zen-hide">Bloco</span>
             </div>
             <div class="progress-bar-bg">
                 <div id="progress-bar-fill" class="progress-bar-fill" style="width:0%;"></div>

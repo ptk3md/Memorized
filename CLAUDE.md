@@ -82,7 +82,6 @@ Ao implementar melhorias de UI, seguir estas diretrizes:
 ### Animações
 
 - `softEntrance` — fade + scale(0.97→1), usado em cards e telas
-- `toastIn` — slide from top, 0.3s
 - `confettiFall` — queda e rotação, 3s
 - Sempre respeitar `@media (prefers-reduced-motion: reduce)` — desabilitar todas as animações
 
@@ -155,8 +154,15 @@ clearProgressForCurrentText()
 
 - Acessadas via `loadSettings()` / `saveSettings()` / `applySettings()`.
 - **Fonte:** aplicada sobrescrevendo a variável CSS `--font-family` em `document.documentElement` (body e cartão já usam `var(--font-family)`). Fontes carregadas por `<link>` no `<head>`: Open Sans (Google Fonts), OpenDyslexic (cdnfonts); Atkinson via `@import` em style.css.
-- **Modo Zen:** classe `body.zen-mode` oculta elementos marcados com `.zen-hide` (chrome não-essencial da tela de estudo). Mantidos sempre: barra de progresso + `#progress-pct`, cartão, `#btn-next`, `#btn-back-play`.
+- **Modo Zen:** classe `body.zen-mode` oculta elementos marcados com `.zen-hide` (chrome não-essencial da tela de estudo). Mantidos sempre: barra de progresso, cartão, `#btn-next`, `#btn-back-play`.
 - Modal: `#settings-modal`, aberto pela engrenagem `#btn-settings` da navbar. Os atalhos de teclado vivem aqui como ajuda (a legenda fixa foi removida da tela de estudo).
+
+### Sessão de estudo (`#screen-play`)
+
+- A `.app-navbar` fica oculta durante o estudo (classe `body.study-mode`, alternada em `showScreen()`) para liberar espaço vertical. `#screen-play` recebe `padding-top` reduzido nesse estado.
+- A porcentagem numérica (`#progress-pct`) foi removida; resta apenas a barra de progresso (`#progress-bar-fill`) + `#mode-badge`.
+- Avisos popup (`showToast`) foram removidos da interface — a função existe como no-op para não quebrar chamadas existentes.
+- **Micro Escadas (`data-mode="sliding"`):** fonte um pouco menor (`clamp(0.85rem, 3.2vw, 1.2rem)`) e `max-height` maior (`calc(100vh - 230px)`, `calc(100vh - 150px)` no modo Zen), aproveitando o espaço liberado pela navbar oculta. Sem `display:contents`/`overflow:hidden` forçados — o scroll do cartão (`overflow-y:auto`) cobre o excesso sem cortar texto.
 
 ---
 
