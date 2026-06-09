@@ -13,14 +13,36 @@
     <!-- Toast container -->
     <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden toast bg-[#333] text-white px-5 py-2 rounded-full text-sm font-medium shadow-lg" aria-live="polite"></div>
 
+    <!-- ========== TELA 0: BIBLIOTECA ========== -->
+    <div id="screen-library" class="flex-1 flex flex-col p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-sm font-bold tracking-widest uppercase">Seus Textos</h1>
+            <button id="btn-new-text" class="btn-claude-primary px-4 py-2 rounded text-xs uppercase tracking-wider flex items-center gap-1" aria-label="Novo texto">
+                <i data-lucide="plus" class="w-3 h-3"></i> Novo
+            </button>
+        </div>
+        <div id="text-list" class="flex-1 overflow-y-auto space-y-3">
+            <!-- Itens da biblioteca serão inseridos aqui dinamicamente -->
+        </div>
+        <div id="empty-library" class="flex-1 flex flex-col items-center justify-center text-center space-y-3">
+            <i data-lucide="book-open" class="w-8 h-8" style="color: var(--text-fg-faint);"></i>
+            <p class="text-xs" style="color: var(--text-fg-faint);">Nenhum texto salvo ainda.<br>Crie um novo para começar.</p>
+        </div>
+    </div>
+
     <!-- ========== TELA 1: ENTRADA ========== -->
-    <div id="screen-input" class="flex-1 flex flex-col justify-between p-6">
+    <div id="screen-input" class="hidden flex-1 flex flex-col justify-between p-6">
         <div class="flex-1 flex flex-col space-y-4">
+            <div class="flex justify-between items-center">
+                <button id="btn-back-library" class="text-xs uppercase tracking-widest font-bold py-2 transition-colors flex items-center gap-1" style="color: var(--text-fg-faint);" aria-label="Voltar para biblioteca">
+                    <i data-lucide="arrow-left" class="w-3 h-3"></i> Biblioteca
+                </button>
+            </div>
             <textarea id="text-input" placeholder="Cole seu texto aqui..." aria-label="Texto para memorizar"
                 class="w-full h-48 textarea-claude rounded-lg p-4 text-base font-sans resize-none transition-all duration-150"></textarea>
             <div class="flex justify-between items-center text-xs" style="color: var(--text-fg-faint);">
                 <span id="sentence-counter">0 frases detectadas</span>
-                <button id="btn-reset-storage" class="underline hover:text-white transition" aria-label="Resetar progresso salvo">Resetar progresso</button>
+                <button id="btn-reset-storage" class="underline hover:text-white transition" aria-label="Resetar todo o progresso">Resetar tudo</button>
             </div>
             <div id="sentence-preview" class="sentence-preview" aria-label="Pré-visualização das frases detectadas"></div>
             <p id="warning-few-sentences" class="text-xs hidden" style="color: #e08b7a;">⚠️ O texto precisa ter pelo menos 2 frases para iniciar.</p>
@@ -57,7 +79,7 @@
                     <div class="flex items-start gap-3">
                         <i data-lucide="layers" class="w-5 h-5 mt-0.5 flex-shrink-0" style="color:var(--accent);"></i>
                         <div>
-                            <span class="font-bold text-sm">Micro Escadas (Em janelas)</span>
+                            <span class="font-bold text-sm">Micro Escadas (Janela Deslizante)</span>
                             <p class="text-xs mt-1" style="color:var(--text-fg-faint);">A cada nível, uma janela de até 4 frases desliza pelo texto. Cada frase aparece no máximo 4 vezes, ideal para textos longos.</p>
                         </div>
                     </div>
@@ -128,8 +150,11 @@
             </p>
             <div id="complete-summary" class="text-xs max-w-md mt-2 p-3 rounded border" style="border-color:#333; background:#1e1e1e; color:var(--text-fg-faint);"></div>
         </div>
-        <div>
-            <button id="btn-restart" class="w-full h-14 btn-claude-secondary font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Reiniciar">
+        <div class="flex gap-3">
+            <button id="btn-back-library-complete" class="flex-1 h-14 btn-claude-secondary font-bold uppercase tracking-widest text-xs rounded-lg" aria-label="Voltar para biblioteca">
+                Biblioteca
+            </button>
+            <button id="btn-restart" class="flex-1 h-14 btn-claude-secondary font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Reiniciar">
                 <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reiniciar
             </button>
         </div>
