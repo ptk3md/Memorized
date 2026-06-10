@@ -291,13 +291,20 @@
     const GITHUB_BRANCH = 'main';
     const TEXTS_FOLDER = 'texts';
 
+    let _githubTextsCache = null;
+    let _githubTextsCacheTime = 0;
+    const GITHUB_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
     async function loadGitHubTexts() {
+        if (_githubTextsCache && (Date.now() - _githubTextsCacheTime) < GITHUB_CACHE_TTL) {
+            return _githubTextsCache;
+        }
         try {
             // Listar arquivos na pasta /texts via GitHub API
             const listUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${TEXTS_FOLDER}?ref=${GITHUB_BRANCH}`;
             const listResponse = await fetch(listUrl);
 
-            if (!listResponse.ok) return [];
+            if (!listResponse.ok) return _githubTextsCache || [];
 
             const items = await listResponse.json();
             const txtFiles = items.filter(item => item.name.endsWith('.txt') && item.type === 'file');
@@ -330,10 +337,12 @@
                 });
             }
 
+            _githubTextsCache = texts;
+            _githubTextsCacheTime = Date.now();
             return texts;
         } catch (error) {
             console.error('Erro carregando textos do GitHub:', error);
-            return [];
+            return _githubTextsCache || [];
         }
     }
 
@@ -391,6 +400,7 @@
             emptyLibrary.classList.add('hidden');
             textList.classList.remove('hidden');
             texts.forEach(text => {
+              try {
                 const preview = (text.content || '').slice(0, 120).replace(/\n/g, ' ');
                 const hasProgress = !!(text.progress);
                 const totalSentences = parseSentences(text.content || '').length;
@@ -414,7 +424,7 @@
                             ${relDate ? `<span class="lib-card__meta">${relDate}</span>` : ''}
                         </div>
                     </div>
-                    <div class="lib-card__preview">${escapeHtml(preview)}${text.content.length > 120 ? '…' : ''}</div>
+                    <div class="lib-card__preview">${escapeHtml(preview)}${(text.content || '').length > 120 ? '…' : ''}</div>
                     ${hasProgress ? `
                     <div class="lib-card__progress-row">
                         <span class="lib-card__badge">Em andamento</span>
@@ -445,6 +455,9 @@
                     </div>
                 `;
                 textList.appendChild(div);
+              } catch (error) {
+                console.warn('Item de texto inválido ignorado na biblioteca:', text, error);
+              }
             });
 
             document.querySelectorAll('.train-btn').forEach(btn => {
