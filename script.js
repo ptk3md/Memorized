@@ -207,10 +207,24 @@
     }
 
     // ---------- persistência da biblioteca ----------
-    function loadAllTexts() {
+    async function loadAllTexts() {
         try {
+            // Carregar textos locais
             const raw = localStorage.getItem(STORAGE_KEY);
-            return raw ? JSON.parse(raw) : [];
+            const localTexts = raw ? JSON.parse(raw) : [];
+
+            // Carregar textos do GitHub
+            const githubTexts = await loadGitHubTexts();
+
+            // Merge: evitar duplicatas por ID
+            const allTexts = [...localTexts];
+            for (const ghText of githubTexts) {
+                if (!allTexts.find(t => t.id === ghText.id)) {
+                    allTexts.push(ghText);
+                }
+            }
+
+            return allTexts;
         } catch {
             return [];
         }
@@ -224,8 +238,8 @@
         }
     }
 
-    function findTextById(id) {
-        const texts = loadAllTexts();
+    async function findTextById(id) {
+        const texts = await loadAllTexts();
         return texts.find(t => t.id === id);
     }
 
@@ -261,6 +275,58 @@
     function clearProgressForCurrentText() {
         if (!currentTextId) return;
         updateTextInLibrary(currentTextId, { progress: null });
+    }
+
+    // ---------- carregamento de textos do GitHub ----------
+    const GITHUB_OWNER = 'ptk3md';
+    const GITHUB_REPO = 'Memorized';
+    const GITHUB_BRANCH = 'main';
+    const TEXTS_FOLDER = 'texts';
+
+    async function loadGitHubTexts() {
+        try {
+            // Listar arquivos na pasta /texts via GitHub API
+            const listUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${TEXTS_FOLDER}?ref=${GITHUB_BRANCH}`;
+            const listResponse = await fetch(listUrl);
+
+            if (!listResponse.ok) return [];
+
+            const items = await listResponse.json();
+            const txtFiles = items.filter(item => item.name.endsWith('.txt') && item.type === 'file');
+
+            // Carregar conteúdo de cada arquivo .txt
+            const texts = [];
+            for (const file of txtFiles) {
+                const rawUrl = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${TEXTS_FOLDER}/${file.name}`;
+                const contentResponse = await fetch(rawUrl);
+
+                if (!contentResponse.ok) continue;
+
+                const content = await contentResponse.text();
+
+                // Converter nome do arquivo em título
+                const title = file.name
+                    .replace('.txt', '')
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+
+                texts.push({
+                    id: `gh-${file.sha}`,
+                    title: title,
+                    content: content.trim(),
+                    progress: null,
+                    savedAt: new Date().toISOString(),
+                    isExternal: true,
+                    source: 'github',
+                    sha: file.sha
+                });
+            }
+
+            return texts;
+        } catch (error) {
+            console.error('Erro carregando textos do GitHub:', error);
+            return [];
+        }
     }
 
     // ---------- modal de confirmação genérico ----------
@@ -307,8 +373,8 @@
     }
 
     // ---------- renderização da biblioteca ----------
-    function renderLibrary() {
-        const texts = loadAllTexts();
+    async function renderLibrary() {
+        const texts = await loadAllTexts();
         textList.innerHTML = '';
         if (texts.length === 0) {
             emptyLibrary.classList.remove('hidden');
@@ -327,10 +393,18 @@
 
                 const div = document.createElement('div');
                 div.className = 'lib-card';
+                const sourceClass = text.isExternal ? 'github' : 'local';
+                const sourceIcon = text.isExternal ? 'github' : 'save';
+                const sourceText = text.isExternal ? 'GitHub' : 'Local';
                 div.innerHTML = `
                     <div class="lib-card__header">
                         <span class="lib-card__title">${escapeHtml(text.title)}</span>
-                        ${relDate ? `<span class="lib-card__meta">${relDate}</span>` : ''}
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="lib-card__source ${sourceClass}">
+                                <i data-lucide="${sourceIcon}" class="w-3 h-3"></i>${sourceText}
+                            </span>
+                            ${relDate ? `<span class="lib-card__meta">${relDate}</span>` : ''}
+                        </div>
                     </div>
                     <div class="lib-card__preview">${escapeHtml(preview)}${text.content.length > 120 ? '…' : ''}</div>
                     ${hasProgress ? `
@@ -347,11 +421,17 @@
                             <i data-lucide="play" class="w-3 h-3"></i> Treinar
                         </button>
                         <button class="lib-card__action-btn lib-card__action-btn--edit edit-btn"
-                            data-id="${text.id}" aria-label="Editar: ${escapeHtml(text.title)}">
+                            data-id="${text.id}" ${text.isExternal ? 'disabled' : ''}
+                            title="${text.isExternal ? 'Textos do GitHub não podem ser editados' : ''}"
+                            aria-label="Editar: ${escapeHtml(text.title)}"
+                            style="${text.isExternal ? 'opacity:0.4; cursor:not-allowed;' : ''}">
                             <i data-lucide="edit-2" class="w-3 h-3"></i> Editar
                         </button>
                         <button class="lib-card__action-btn lib-card__action-btn--delete delete-btn"
-                            data-id="${text.id}" aria-label="Apagar: ${escapeHtml(text.title)}">
+                            data-id="${text.id}" ${text.isExternal ? 'disabled' : ''}
+                            title="${text.isExternal ? 'Textos do GitHub não podem ser apagados' : ''}"
+                            aria-label="Apagar: ${escapeHtml(text.title)}"
+                            style="${text.isExternal ? 'opacity:0.4; cursor:not-allowed;' : ''}">
                             <i data-lucide="trash-2" class="w-3 h-3"></i>
                         </button>
                     </div>
@@ -366,9 +446,11 @@
                 btn.addEventListener('click', (e) => editText(e.currentTarget.dataset.id));
             });
             document.querySelectorAll('.delete-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
+                btn.addEventListener('click', async (e) => {
                     const id = e.currentTarget.dataset.id;
-                    const textItem = findTextById(id);
+                    const allTexts = await loadAllTexts();
+                    const textItem = allTexts.find(t => t.id === id);
+                    if (textItem && textItem.isExternal) return; // Não deleta textos do GitHub
                     openConfirmModal(
                         'Apagar texto?',
                         `"${escapeHtml(textItem ? textItem.title : '')}" e todo seu progresso serão apagados permanentemente.`,
@@ -406,8 +488,8 @@
     }
 
     // ---------- ações da biblioteca ----------
-    function startTraining(id) {
-        const text = findTextById(id);
+    async function startTraining(id) {
+        const text = await findTextById(id);
         if (!text) return;
         sentences = parseSentences(text.content);
         if (sentences.length < 2) {
@@ -473,9 +555,9 @@
         showScreen(screenMethod);
     }
 
-    function editText(id) {
-        const text = findTextById(id);
-        if (!text) return;
+    async function editText(id) {
+        const text = await findTextById(id);
+        if (!text || text.isExternal) return; // Não permite editar textos do GitHub
         isEditing = true;
         currentTextId = id;
         titleInput.value = text.title || '';
