@@ -145,6 +145,8 @@ clearProgressForCurrentText()
 
 **⚠️ Atenção (async/sync):** `loadAllTexts()` é **assíncrona** (faz fetch ao GitHub). Qualquer função que apenas lê/grava textos **locais** (criar, editar, apagar, salvar progresso) deve usar `loadLocalTexts()` (síncrona). Só use `loadAllTexts()`/`await` em funções que precisam exibir/buscar textos do GitHub também (`renderLibrary`, `findTextById`, `startTraining`, `editText`). Misturar os dois (ex.: chamar `loadAllTexts()` sem `await` numa função síncrona) quebra `texts.push(...)`/`saveAllTexts(texts)` com `TypeError`, pois `texts` vira uma `Promise`.
 
+**Histórico:** essa troca já causou regressão real em `saveTextToLibrary()` (chamava `loadAllTexts()` sem `await`, quebrando os botões "Salvar" e "Começar" — corrigido trocando para `loadLocalTexts()`). Ao tornar uma função `async` ou ao adicionar `await loadAllTexts()`, revisar **todos** os outros usos de `loadAllTexts()`/`loadLocalTexts()` no arquivo para garantir consistência.
+
 ### Configurações (chave separada)
 
 **Chave:** `memorizador-settings` — **independente** de `memorizador-texts`.
@@ -355,6 +357,7 @@ Não há suite de testes automatizados. Testar abrindo `index.html` diretamente 
 **Checklist de verificação após alterações:**
 
 - [ ] Fluxo completo: criar texto → selecionar método → treinar → concluir
+- [ ] Botões "Salvar" e "Começar" criam um novo texto sem `TypeError` no console (ver nota async/sync de `loadAllTexts`/`loadLocalTexts`)
 - [ ] Os 3 modos funcionam: block, serial, sliding
 - [ ] Persistência: fechar e reabrir preserva progresso
 - [ ] Retomar treino: modal de "Retomar?" aparece com progresso salvo
