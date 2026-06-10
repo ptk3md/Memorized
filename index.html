@@ -68,8 +68,13 @@
                 O texto precisa ter pelo menos 2 frases para iniciar.
             </p>
         </div>
-        <div class="pt-6">
-            <button id="btn-start" class="w-full h-14 btn-claude-primary font-bold uppercase tracking-widest text-xs rounded-lg disabled:opacity-40 disabled:cursor-not-allowed" disabled aria-label="Começar treino">Começar</button>
+        <div class="pt-6 flex gap-3">
+            <button id="btn-save-only" class="flex-1 h-14 btn-claude-secondary font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Salvar texto">
+                <i data-lucide="save" class="w-4 h-4"></i> Salvar
+            </button>
+            <button id="btn-start" class="flex-1 h-14 btn-claude-primary font-bold uppercase tracking-widest text-xs rounded-lg disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2" disabled aria-label="Começar treino">
+                <i data-lucide="play" class="w-4 h-4"></i> Começar
+            </button>
         </div>
     </div>
 
