@@ -17,6 +17,7 @@
     const sentencePreview = document.getElementById('sentence-preview');
     const warningFew = document.getElementById('warning-few-sentences');
     const btnStart = document.getElementById('btn-start');
+    const btnSaveOnly = document.getElementById('btn-save-only');
     const btnBackLibrary = document.getElementById('btn-back-library');
     const btnResetStorage = document.getElementById('btn-reset-storage');
 
@@ -503,6 +504,54 @@
         renderLibrary();
     });
 
+    // Função auxiliar para salvar o texto (usada tanto pelo "Salvar" quanto pelo "Começar")
+    function saveTextToLibrary(title, content, isEditingExisting) {
+        if (isEditingExisting && currentTextId) {
+            updateTextInLibrary(currentTextId, {
+                title,
+                content,
+                progress: null
+            });
+            return currentTextId;
+        } else {
+            const newId = generateId();
+            const texts = loadAllTexts();
+            texts.push({
+                id: newId,
+                title,
+                content,
+                progress: null,
+                savedAt: new Date().toISOString()
+            });
+            saveAllTexts(texts);
+            return newId;
+        }
+    }
+
+    // Botão "Salvar" — apenas salva e volta para a biblioteca
+    btnSaveOnly.addEventListener('click', () => {
+        const s = parseSentences(textInput.value);
+        if (s.length < 1) {
+            showToast('Digite algum texto para salvar.', 'warning');
+            return;
+        }
+        sentences = s;
+        originalText = textInput.value;
+        originalTextHash = generateTextHash(originalText);
+
+        let title = (titleInput.value || '').trim();
+        if (title === '') {
+            title = originalText.slice(0, 50).replace(/\s+/g, ' ').trim() + (originalText.length > 50 ? '…' : '');
+        }
+
+        currentTextId = saveTextToLibrary(title, originalText, isEditing && currentTextId);
+        showToast('Texto salvo!', 'success');
+        showScreen(screenLibrary);
+        renderLibrary();
+        lucide.createIcons();
+    });
+
+    // Botão "Começar" — salva e vai para a seleção de método
     btnStart.addEventListener('click', () => {
         const s = parseSentences(textInput.value);
         if (s.length < 2) {
@@ -518,28 +567,8 @@
             title = originalText.slice(0, 50).replace(/\s+/g, ' ').trim() + (originalText.length > 50 ? '…' : '');
         }
 
-        if (isEditing && currentTextId) {
-            updateTextInLibrary(currentTextId, {
-                title,
-                content: originalText,
-                progress: null
-            });
-            showToast('Texto atualizado!', 'success');
-        } else {
-            const newId = generateId();
-            currentTextId = newId;
-            const texts = loadAllTexts();
-            texts.push({
-                id: newId,
-                title,
-                content: originalText,
-                progress: null,
-                savedAt: new Date().toISOString()
-            });
-            saveAllTexts(texts);
-            showToast('Texto salvo!', 'success');
-        }
-
+        currentTextId = saveTextToLibrary(title, originalText, isEditing && currentTextId);
+        showToast('Texto salvo!', 'success');
         goToMethodSelection();
         lucide.createIcons();
     });
@@ -633,64 +662,58 @@
     }
 
     function renderSlidingMode() {
-    const N = slidingWindowSize;
-    const totalFrases = sentences.length;
-    const totalSteps = totalFrases * N; // total de passos até a conclusão
+        const N = slidingWindowSize;
+        const totalFrases = sentences.length;
+        const totalSteps = totalFrases * N;
 
-    // ---- cálculo da janela ----
-    // Enquanto não atingimos N frases na janela, ela cresce: [0], [0,1], [0,1,2]...
-    // Depois desliza com tamanho fixo N, com wrap-around quando necessário.
-    let startIndex, endIndex, windowSize;
+        let startIndex, endIndex, windowSize;
 
-    if (currentLevel < N - 1) {
-        // Fase de crescimento: janela começa em 0 e vai até currentLevel
-        startIndex = 0;
-        endIndex = currentLevel;
-        windowSize = currentLevel + 1;
-    } else {
-        // Fase de deslizamento: janela de tamanho N
-        // currentLevel rastreia a posição da ÚLTIMA frase da janela
-        const lastPhraseIndex = currentLevel % totalFrases;
-        endIndex = lastPhraseIndex;
-        startIndex = (endIndex - N + 1 + totalFrases) % totalFrases;
-        windowSize = N;
+        if (currentLevel < N - 1) {
+            // Fase de crescimento: janela começa em 0 e vai até currentLevel
+            startIndex = 0;
+            endIndex = currentLevel;
+            windowSize = currentLevel + 1;
+        } else {
+            // Fase de deslizamento: janela de tamanho N
+            const lastPhraseIndex = currentLevel % totalFrases;
+            endIndex = lastPhraseIndex;
+            startIndex = (endIndex - N + 1 + totalFrases) % totalFrases;
+            windowSize = N;
+        }
+
+        let html = '';
+        if (startIndex <= endIndex) {
+            // Janela contígua
+            for (let i = startIndex; i <= endIndex; i++) {
+                const displayNum = i - startIndex + 1;
+                const isLast = (i === endIndex);
+                const phraseClass = isLast ? ' current-block-phrase' : '';
+                html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+            }
+        } else {
+            // Wrap-around
+            for (let i = startIndex; i < totalFrases; i++) {
+                const displayNum = i - startIndex + 1;
+                html += `<p style="margin-bottom:0.5em;"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+            }
+            for (let i = 0; i <= endIndex; i++) {
+                const displayNum = (totalFrases - startIndex) + i + 1;
+                const isLast = (i === endIndex);
+                const phraseClass = isLast ? ' current-block-phrase' : '';
+                html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+            }
+        }
+
+        cardContent.innerHTML = html;
+        recitationHint.textContent = 'Recite todas as frases acima em voz alta.';
+
+        const displayLevel = (currentLevel % totalFrases) + 1;
+        levelIndicator.textContent = `Passo ${currentLevel+1} de ${totalSteps} (frase ${displayLevel})`;
+        contextIndicator.innerHTML = `Janela de ${windowSize} frase${windowSize>1?'s':''} · Cada frase aparece ${N} vez${N>1?'es':''}`;
+        modeBadge.textContent = `Micro ${N}`;
+        const progress = ((currentLevel + 1) / totalSteps) * 100;
+        progressBarFill.style.width = `${progress}%`;
     }
-
-    // ---- montagem do HTML da janela ----
-    let html = '';
-    if (startIndex <= endIndex) {
-        // Janela contígua
-        for (let i = startIndex; i <= endIndex; i++) {
-            const displayNum = i - startIndex + 1;
-            const isLast = (i === endIndex);
-            const phraseClass = isLast ? ' current-block-phrase' : '';
-            html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-        }
-    } else {
-        // Wrap-around (ex.: frases 4, 5, 1, 2)
-        for (let i = startIndex; i < totalFrases; i++) {
-            const displayNum = i - startIndex + 1;
-            html += `<p style="margin-bottom:0.5em;"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-        }
-        for (let i = 0; i <= endIndex; i++) {
-            const displayNum = (totalFrases - startIndex) + i + 1;
-            const isLast = (i === endIndex);
-            const phraseClass = isLast ? ' current-block-phrase' : '';
-            html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-        }
-    }
-
-    cardContent.innerHTML = html;
-    recitationHint.textContent = 'Recite todas as frases acima em voz alta.';
-
-    // ---- indicadores ----
-    const displayLevel = (currentLevel % totalFrases) + 1;
-    levelIndicator.textContent = `Passo ${currentLevel+1} de ${totalSteps} (frase ${displayLevel})`;
-    contextIndicator.innerHTML = `Janela de ${windowSize} frase${windowSize>1?'s':''} · Cada frase aparece ${N} vez${N>1?'es':''}`;
-    modeBadge.textContent = `Micro ${N}`;
-    const progress = ((currentLevel + 1) / totalSteps) * 100;
-    progressBarFill.style.width = `${progress}%`;
-}
 
     function renderCard() {
         const card = cardContent.parentElement;
@@ -751,7 +774,6 @@
                 currentLevel++;
                 saveProgressForCurrentText();
                 renderCard();
-                // Mostra toast a cada ciclo completo
                 if ((currentLevel + 1) % sentences.length === 0) {
                     const ciclo = Math.floor((currentLevel + 1) / sentences.length);
                     showToast(`Ciclo ${ciclo} de ${N} concluído!`, 'info');
