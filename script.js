@@ -57,6 +57,11 @@
     const fontOptions = document.querySelectorAll('.font-option');
     const zenToggle = document.getElementById('zen-toggle');
 
+    // Novos elementos para o seletor de janela deslizante
+    const slidingWindowSelector = document.getElementById('sliding-window-selector');
+    const windowSizeOptions = document.querySelectorAll('.window-size-btn');
+    let slidingWindowSize = 4; // valor padrão, será atualizado pelo seletor
+
     // ---------- estado da aplicação ----------
     let sentences = [];
     let method = null;
@@ -65,12 +70,11 @@
     let currentLevel = 0;
     let currentIndexWithinLevel = 0;
     let selectedMethod = null;
-    let currentTextId = null;   // ID do texto ativo na biblioteca
-    let isEditing = false;      // se estamos editando um texto existente
+    let currentTextId = null;
+    let isEditing = false;
 
     const STORAGE_KEY = 'memorizador-texts';
     const SETTINGS_KEY = 'memorizador-settings';
-    const WINDOW_SIZE = 4;
 
     // ---------- configurações (fonte + modo zen) ----------
     const FONT_MAP = {
@@ -96,21 +100,17 @@
     function saveSettings() {
         try {
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-        } catch (e) { /* ignora falha de quota; configurações não são críticas */ }
+        } catch (e) { /* ignora falha de quota */ }
     }
 
     function applySettings() {
-        // Fonte: resolve via a variável CSS --font-family (body e cartão já a usam)
         document.documentElement.style.setProperty('--font-family', FONT_MAP[settings.font] || FONT_MAP.atkinson);
-        // Modo Zen: classe no body controla a visibilidade do chrome não-essencial
         document.body.classList.toggle('zen-mode', settings.zen);
-        // Reflete o estado nos controles do modal de configurações
         fontOptions.forEach(opt => opt.classList.toggle('selected', opt.dataset.font === settings.font));
         if (zenToggle) zenToggle.setAttribute('aria-checked', settings.zen ? 'true' : 'false');
     }
 
     // ---------- utilidades ----------
-    // Avisos popup removidos: showToast é um no-op para não quebrar as chamadas existentes.
     function showToast() {}
 
     function generateId() {
@@ -147,17 +147,10 @@
             ).join("") || `<p>${c}</p>`;
         }
         const PAIRS = [
-            [/\\geq?\b/g, "&ge;"],
-            [/\\leq?\b/g, "&le;"],
-            [/\\neq?\b/g, "&ne;"],
-            [/\\pm\b/g, "&plusmn;"],
-            [/\\approx\b/g, "&asymp;"],
-            [/\\%/g, "%"],
-            [/-->/g, "&rarr;"],
-            [/<--/g, "&larr;"],
-            [/\\rightarrow\b/g, "&rarr;"],
-            [/\\leftarrow\b/g, "&larr;"],
-            [/\^o/g, "°"]
+            [/\\geq?\b/g, "&ge;"], [/\leq?\b/g, "&le;"], [/\\neq?\b/g, "&ne;"],
+            [/\\pm\b/g, "&plusmn;"], [/\\approx\b/g, "&asymp;"], [/\\%/g, "%"],
+            [/-->/g, "&rarr;"], [/<--/g, "&larr;"], [/\\rightarrow\b/g, "&rarr;"],
+            [/\\leftarrow\b/g, "&larr;"], [/\^o/g, "°"]
         ];
         for (const [r, v] of PAIRS) c = c.replace(r, v);
         c = c.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "$1/$2");
@@ -257,6 +250,10 @@
             currentLevel,
             currentIndexWithinLevel: method === 'serial' ? currentIndexWithinLevel : 0
         };
+        // Salva o tamanho da janela para o modo sliding
+        if (method === 'sliding') {
+            progress.slidingWindowSize = slidingWindowSize;
+        }
         updateTextInLibrary(currentTextId, { progress });
     }
 
@@ -265,7 +262,7 @@
         updateTextInLibrary(currentTextId, { progress: null });
     }
 
-    // ---------- modal de confirmação genérico (reutiliza #delete-modal) ----------
+    // ---------- modal de confirmação genérico ----------
     let _confirmCallback = null;
 
     function openConfirmModal(title, desc, onConfirm, confirmLabel, danger) {
@@ -274,13 +271,10 @@
         deleteModalConfirm.textContent = confirmLabel || 'Confirmar';
         deleteModalConfirm.style.background = danger ? '#c62828' : 'var(--accent)';
         _confirmCallback = onConfirm;
-
-        // Mostra o ícone de lixeira apenas para delete, senão usa alerta
         const iconEl = deleteModal.querySelector('.delete-modal-icon i');
         if (iconEl) {
             iconEl.setAttribute('data-lucide', danger ? 'trash-2' : 'alert-circle');
         }
-
         deleteModal.classList.remove('hidden');
         trapFocus(deleteModal);
         deleteModalCancel.focus();
@@ -305,11 +299,8 @@
 
     function escapeHtml(text) {
         const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
+            '&': '&amp;', '<': '&lt;', '>': '&gt;',
+            '"': '&quot;', "'": '&#039;'
         };
         return (text || '').replace(/[&<>"']/g, m => map[m]);
     }
@@ -407,11 +398,7 @@
             screen.classList.remove('screen-transition-enter');
         }, { once: true });
         lucide.createIcons();
-
-        // Ajuste visual: oculta a navbar fixa durante a sessão de estudo para liberar espaço
         document.body.classList.toggle('study-mode', screen === screenPlay);
-
-        // Foco automático em btn-next ao entrar na tela de treino
         if (screen === screenPlay) {
             setTimeout(() => btnNext && btnNext.focus(), 80);
         }
@@ -431,7 +418,12 @@
         originalTextHash = generateTextHash(originalText);
         textInput.value = originalText;
 
-        // Verifica se há progresso salvo
+        // Restaura o tamanho da janela se for modo sliding com progresso salvo
+        if (text.progress && text.progress.method === 'sliding' && text.progress.slidingWindowSize) {
+            slidingWindowSize = text.progress.slidingWindowSize;
+            windowSizeOptions.forEach(btn => btn.classList.toggle('selected', parseInt(btn.dataset.size) === slidingWindowSize));
+        }
+
         if (text.progress) {
             resumeModal.classList.remove('hidden');
             trapFocus(resumeModal);
@@ -444,6 +436,9 @@
                 method = text.progress.method;
                 currentLevel = text.progress.currentLevel;
                 currentIndexWithinLevel = text.progress.method === 'serial' ? (text.progress.currentIndexWithinLevel || 0) : 0;
+                if (text.progress.method === 'sliding' && text.progress.slidingWindowSize) {
+                    slidingWindowSize = text.progress.slidingWindowSize;
+                }
                 showScreen(screenPlay);
                 renderCard();
             };
@@ -470,6 +465,10 @@
         selectedMethod = null;
         methodOptions.forEach(btn => btn.classList.remove('selected'));
         btnConfirmMethod.disabled = true;
+        // Reseta o seletor de janela para o valor padrão e oculta
+        slidingWindowSize = 4;
+        windowSizeOptions.forEach(btn => btn.classList.toggle('selected', btn.dataset.size === '4'));
+        slidingWindowSelector.classList.add('hidden');
         showScreen(screenMethod);
     }
 
@@ -566,6 +565,21 @@
             btn.classList.add('selected');
             selectedMethod = btn.dataset.method;
             btnConfirmMethod.disabled = false;
+            // Mostra/oculta seletor de janela conforme o método escolhido
+            if (selectedMethod === 'sliding') {
+                slidingWindowSelector.classList.remove('hidden');
+            } else {
+                slidingWindowSelector.classList.add('hidden');
+            }
+        });
+    });
+
+    // Eventos do seletor de tamanho da janela deslizante
+    windowSizeOptions.forEach(btn => {
+        btn.addEventListener('click', () => {
+            windowSizeOptions.forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            slidingWindowSize = parseInt(btn.dataset.size, 10);
         });
     });
 
@@ -586,14 +600,12 @@
         for (let i = 0; i <= currentLevel; i++) {
             const isCurrent = (i === currentLevel);
             const phraseClass = isCurrent ? ' current-block-phrase' : '';
-            html +=
-                `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${i+1}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+            html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${i+1}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
         }
         cardContent.innerHTML = html;
         recitationHint.textContent = 'Recite todas as frases acima em voz alta.';
         levelIndicator.textContent = `Nível ${currentLevel+1} de ${sentences.length}`;
-        contextIndicator.innerHTML =
-            `Frases neste nível: <span style="color:var(--text-fg);">${sentences.slice(0, currentLevel+1).map(s => s.slice(0,25)+(s.length>25?'…':'')).join(' • ')}</span>`;
+        contextIndicator.innerHTML = `Frases neste nível: <span style="color:var(--text-fg);">${sentences.slice(0, currentLevel+1).map(s => s.slice(0,25)+(s.length>25?'…':'')).join(' • ')}</span>`;
         modeBadge.textContent = 'Bloco';
         const progress = ((currentLevel + 1) / sentences.length) * 100;
         progressBarFill.style.width = `${progress}%`;
@@ -602,20 +614,15 @@
     function renderSerialMode() {
         const phrase = sentences[currentIndexWithinLevel];
         cardContent.innerHTML = formatAnkiMarkup(phrase);
-        levelIndicator.textContent =
-            `Nível ${currentLevel+1} (acumula ${currentLevel+1} frase${currentLevel+1>1?'s':''})`;
+        levelIndicator.textContent = `Nível ${currentLevel+1} (acumula ${currentLevel+1} frase${currentLevel+1>1?'s':''})`;
         let contextHtml = '';
         for (let i = 0; i <= currentLevel; i++) {
-            if (i < currentIndexWithinLevel) contextHtml +=
-                `<span style="color:var(--accent);">✓ ${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
-            else if (i === currentIndexWithinLevel) contextHtml +=
-                `<span style="color:#fff;">▶ ${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
-            else contextHtml +=
-                `<span style="color:#555;">${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
+            if (i < currentIndexWithinLevel) contextHtml += `<span style="color:var(--accent);">✓ ${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
+            else if (i === currentIndexWithinLevel) contextHtml += `<span style="color:#fff;">▶ ${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
+            else contextHtml += `<span style="color:#555;">${sentences[i].slice(0,15)}${sentences[i].length>15?'…':''}</span> • `;
         }
         contextIndicator.innerHTML = contextHtml.replace(/ • $/, '');
-        recitationHint.textContent =
-            'Recite mentalmente todas as frases que já apareceram neste nível antes de avançar.';
+        recitationHint.textContent = 'Recite mentalmente todas as frases que já apareceram neste nível antes de avançar.';
         modeBadge.textContent = 'Serial';
         const totalSteps = (sentences.length * (sentences.length + 1)) / 2;
         let completedSteps = 0;
@@ -626,24 +633,42 @@
     }
 
     function renderSlidingMode() {
-        const start = Math.max(0, currentLevel - WINDOW_SIZE + 1);
-        const end = currentLevel;
+        const N = slidingWindowSize;
+        const totalFrases = sentences.length;
+        const totalSteps = totalFrases * N;
+        // currentLevel pode ser maior que totalFrases-1 (wrap-around)
+        const endIndex = currentLevel % totalFrases;
+        const startIndex = (endIndex - N + 1 + totalFrases) % totalFrases;
+        
         let html = '';
-        for (let i = start; i <= end; i++) {
-            const displayNum = i - start + 1;
-            const isLast = (i === end);
-            const phraseClass = isLast ? ' current-block-phrase' : '';
-            html +=
-                `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+        if (startIndex <= endIndex) {
+            // Janela contígua normal
+            for (let i = startIndex; i <= endIndex; i++) {
+                const displayNum = i - startIndex + 1;
+                const isLast = (i === endIndex);
+                const phraseClass = isLast ? ' current-block-phrase' : '';
+                html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+            }
+        } else {
+            // Wrap-around: janela quebrada (ex: frases 4, 5, 1, 2)
+            for (let i = startIndex; i < totalFrases; i++) {
+                const displayNum = i - startIndex + 1;
+                html += `<p style="margin-bottom:0.5em;"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+            }
+            for (let i = 0; i <= endIndex; i++) {
+                const displayNum = (totalFrases - startIndex) + i + 1;
+                const isLast = (i === endIndex);
+                const phraseClass = isLast ? ' current-block-phrase' : '';
+                html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+            }
         }
         cardContent.innerHTML = html;
         recitationHint.textContent = 'Recite todas as frases acima em voz alta.';
-        levelIndicator.textContent = `Nível ${currentLevel+1} de ${sentences.length}`;
-        const windowPhrases = sentences.slice(start, end + 1);
-        contextIndicator.innerHTML =
-            `Frases neste nível: <span style="color:var(--text-fg);">${windowPhrases.map(s => s.slice(0,25)+(s.length>25?'…':'')).join(' • ')}</span>`;
-        modeBadge.textContent = 'Micro';
-        const progress = ((currentLevel + 1) / sentences.length) * 100;
+        const displayLevel = (currentLevel % totalFrases) + 1;
+        levelIndicator.textContent = `Passo ${currentLevel+1} de ${totalSteps} (frase ${displayLevel})`;
+        contextIndicator.innerHTML = `Janela de ${N} frases · Cada frase aparece ${N} vezes`;
+        modeBadge.textContent = `Micro ${N}`;
+        const progress = ((currentLevel + 1) / totalSteps) * 100;
         progressBarFill.style.width = `${progress}%`;
     }
 
@@ -652,8 +677,6 @@
         card.classList.remove('animate-entrance');
         void card.offsetWidth;
         card.classList.add('animate-entrance');
-
-        // Ajuste visual: marca o modo no cartão para o CSS (layout do Micro Escadas)
         card.setAttribute('data-mode', method || '');
 
         if (method === 'block') {
@@ -664,8 +687,6 @@
             renderSlidingMode();
         }
 
-        // "Page up" suave: ao trocar de frase, volta ao topo do cartão
-        // (no modo clássico a nova frase entra embaixo; o usuário relê do início)
         if (card.scrollTo) {
             card.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
@@ -704,11 +725,17 @@
                 }
             }
         } else if (method === 'sliding') {
-            if (currentLevel < sentences.length - 1) {
+            const N = slidingWindowSize;
+            const totalSteps = sentences.length * N;
+            if (currentLevel < totalSteps - 1) {
                 currentLevel++;
                 saveProgressForCurrentText();
                 renderCard();
-                showToast(`Nível ${currentLevel+1} concluído!`, 'info');
+                // Mostra toast a cada ciclo completo
+                if ((currentLevel + 1) % sentences.length === 0) {
+                    const ciclo = Math.floor((currentLevel + 1) / sentences.length);
+                    showToast(`Ciclo ${ciclo} de ${N} concluído!`, 'info');
+                }
             } else {
                 clearProgressForCurrentText();
                 showCompleteScreen();
@@ -763,7 +790,7 @@
             '#d97757', '#7eb8da', '#81c784', '#ce93d8',
             '#ffb74d', '#e57373', '#f5c6a0', '#aecbfa'
         ];
-        const shapes = [2, 4, 50]; // border-radius: px para quadrado, arredondado, círculo
+        const shapes = [2, 4, 50];
         for (let i = 0; i < 70; i++) {
             const piece = document.createElement('div');
             piece.className = 'confetti-piece';
@@ -902,8 +929,6 @@
         renderLibrary();
     });
 
-    // ---------- botão voltar na tela de estudo ----------
-    // Progresso é salvo continuamente, então sair a qualquer momento é seguro.
     btnBackPlay.addEventListener('click', () => {
         showScreen(screenLibrary);
         renderLibrary();
@@ -911,7 +936,7 @@
 
     // ---------- modal de configurações ----------
     function openSettingsModal() {
-        applySettings(); // garante que os controles reflitam o estado salvo
+        applySettings();
         settingsModal.classList.remove('hidden');
         trapFocus(settingsModal);
         btnCloseSettings.focus();
@@ -948,7 +973,6 @@
 
     // ---------- teclas de atalho ----------
     document.addEventListener('keydown', (e) => {
-        // Escape: fechar modal ou voltar tela
         if (e.key === 'Escape') {
             if (!settingsModal.classList.contains('hidden')) {
                 closeSettingsModal();
@@ -969,7 +993,6 @@
             }
         }
 
-        // Atalhos da tela de treino
         if (screenPlay.classList.contains('hidden')) return;
         if (!resumeModal.classList.contains('hidden') ||
             !fulltextModal.classList.contains('hidden') ||
@@ -1004,7 +1027,7 @@
     // ---------- inicialização ----------
     window.addEventListener('DOMContentLoaded', () => {
         loadSettings();
-        applySettings(); // fonte + modo zen valem desde a carga
+        applySettings();
         renderLibrary();
         lucide.createIcons();
     });
