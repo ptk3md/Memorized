@@ -435,11 +435,13 @@
                             style="${text.isExternal ? 'opacity:0.4; cursor:not-allowed;' : ''}">
                             <i data-lucide="edit-2" class="w-3 h-3"></i> Editar
                         </button>
-                        ${text.isExternal ? '' : `
                         <button class="lib-card__action-btn lib-card__action-btn--delete delete-btn"
-                            data-id="${text.id}" aria-label="Apagar: ${escapeHtml(text.title)}">
+                            data-id="${text.id}" ${text.isExternal ? 'disabled' : ''}
+                            title="${text.isExternal ? 'Textos do GitHub não podem ser apagados' : ''}"
+                            aria-label="Apagar: ${escapeHtml(text.title)}"
+                            style="${text.isExternal ? 'opacity:0.4; cursor:not-allowed;' : ''}">
                             <i data-lucide="trash-2" class="w-3 h-3"></i>
-                        </button>`}
+                        </button>
                     </div>
                 `;
                 textList.appendChild(div);
@@ -452,9 +454,11 @@
                 btn.addEventListener('click', (e) => editText(e.currentTarget.dataset.id));
             });
             document.querySelectorAll('.delete-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
+                btn.addEventListener('click', async (e) => {
                     const id = e.currentTarget.dataset.id;
-                    const textItem = loadLocalTexts().find(t => t.id === id);
+                    const allTexts = await loadAllTexts();
+                    const textItem = allTexts.find(t => t.id === id);
+                    if (textItem && textItem.isExternal) return; // Não deleta textos do GitHub
                     openConfirmModal(
                         'Apagar texto?',
                         `"${escapeHtml(textItem ? textItem.title : '')}" e todo seu progresso serão apagados permanentemente.`,
@@ -601,7 +605,7 @@
             return currentTextId;
         } else {
             const newId = generateId();
-            const texts = loadAllTexts();
+            const texts = loadLocalTexts();
             texts.push({
                 id: newId,
                 title,
