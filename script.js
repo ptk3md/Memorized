@@ -601,7 +601,7 @@
             return currentTextId;
         } else {
             const newId = generateId();
-            const texts = loadAllTexts();
+            const texts = loadLocalTexts();
             texts.push({
                 id: newId,
                 title,

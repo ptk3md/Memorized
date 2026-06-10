@@ -132,14 +132,18 @@ handlePrev()                  — retrocede
 
 **Funções de persistência:**
 ```
-loadAllTexts()              → lê e parseia localStorage
+loadLocalTexts()            → lê e parseia localStorage (síncrona, apenas locais)
+loadAllTexts()               → async; merge de loadLocalTexts() + loadGitHubTexts()
 saveAllTexts(texts)         → serializa e salva
-findTextById(id)
-updateTextInLibrary(id, updates)
-deleteTextFromLibrary(id)
+findTextById(id)             → async (usa loadAllTexts())
+saveTextToLibrary(...)       → cria/atualiza texto local (usa loadLocalTexts())
+updateTextInLibrary(id, updates)  → usa loadLocalTexts()
+deleteTextFromLibrary(id)         → usa loadLocalTexts()
 saveProgressForCurrentText()
 clearProgressForCurrentText()
 ```
+
+**⚠️ Atenção (async/sync):** `loadAllTexts()` é **assíncrona** (faz fetch ao GitHub). Qualquer função que apenas lê/grava textos **locais** (criar, editar, apagar, salvar progresso) deve usar `loadLocalTexts()` (síncrona). Só use `loadAllTexts()`/`await` em funções que precisam exibir/buscar textos do GitHub também (`renderLibrary`, `findTextById`, `startTraining`, `editText`). Misturar os dois (ex.: chamar `loadAllTexts()` sem `await` numa função síncrona) quebra `texts.push(...)`/`saveAllTexts(texts)` com `TypeError`, pois `texts` vira uma `Promise`.
 
 ### Configurações (chave separada)
 
