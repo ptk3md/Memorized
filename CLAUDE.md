@@ -164,6 +164,55 @@ clearProgressForCurrentText()
 - Avisos popup (`showToast`) foram removidos da interface — a função existe como no-op para não quebrar chamadas existentes.
 - **Micro Escadas (`data-mode="sliding"`):** fonte um pouco menor (`clamp(0.85rem, 3.2vw, 1.2rem)`) e `max-height` maior (`calc(100vh - 230px)`, `calc(100vh - 150px)` no modo Zen), aproveitando o espaço liberado pela navbar oculta. Sem `display:contents`/`overflow:hidden` forçados — o scroll do cartão (`overflow-y:auto`) cobre o excesso sem cortar texto.
 
+### Textos Compartilhados (GitHub)
+
+Os textos podem ser fornecidos de duas formas:
+
+1. **Locais** (localStorage): criados pelo usuário, salvos no navegador
+2. **GitHub** (`/texts/`): textos predefinidos no repositório
+
+#### Estrutura de arquivo `/texts/`
+
+Cada arquivo `.txt` é um texto completo. O título é automaticamente extraído do nome do arquivo:
+
+- `poema-classico.txt` → "Poema Clássico"
+- `trecho-tecnico.txt` → "Trecho Técnico"
+- `conto_curto.txt` → "Conto Curto"
+
+Regra: hífens (`-`) e underscores (`_`) são convertidos para espaços, e a primeira letra de cada palavra é capitalizada.
+
+#### Carregamento e comportamento
+
+- **Função `loadAllTexts()`** (async): carrega textos locais do localStorage e textos do GitHub via GitHub API
+- **Função `loadGitHubTexts()`** (async): lista e carrega arquivos `.txt` da pasta `/texts` usando:
+  - GitHub API para listar arquivos: `https://api.github.com/repos/ptk3md/Memorized/contents/texts`
+  - raw.githubusercontent.com para conteúdo: `https://raw.githubusercontent.com/ptk3md/Memorized/main/texts/{filename}.txt`
+- **ID único**: textos do GitHub recebem ID `gh-{sha}` (baseado no SHA do commit)
+- **Badge visual**: textos do GitHub aparecem na biblioteca com badge azul "GitHub"; locais com badge laranja "Local"
+- **Progresso**: textos do GitHub sempre têm `progress: null` (não salvamos progresso)
+- **Flag `isExternal`**: `true` para GitHub, `false` ou undefined para locais
+
+#### Restrições
+
+- Textos do GitHub não podem ser editados (botão desabilitado)
+- Textos do GitHub não podem ser deletados (botão desabilitado)
+- Apenas o botão "Treinar" funciona normalmente
+- Se um arquivo for deletado do GitHub, o app continua funcionando com textos locais
+
+#### Para adicionar novo texto
+
+1. Crie arquivo `.txt` em `/texts/` (ex: `novo-texto.txt`)
+2. Escreva o conteúdo (texto puro, sem metadados)
+3. Faça commit e push para `main`
+4. Recarregue o app (Ctrl+R ou F5) — o novo texto aparecerá na biblioteca
+
+#### Fallback (sem conexão)
+
+Se o GitHub não estiver acessível ou houver erro de conexão:
+- `loadGitHubTexts()` retorna array vazio (silenciosamente)
+- `loadAllTexts()` faz merge apenas com textos locais
+- App continua funcionável com biblioteca local
+
 ---
 
 ## Acessibilidade — regras obrigatórias
