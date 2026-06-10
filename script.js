@@ -633,44 +633,64 @@
     }
 
     function renderSlidingMode() {
-        const N = slidingWindowSize;
-        const totalFrases = sentences.length;
-        const totalSteps = totalFrases * N;
-        // currentLevel pode ser maior que totalFrases-1 (wrap-around)
-        const endIndex = currentLevel % totalFrases;
-        const startIndex = (endIndex - N + 1 + totalFrases) % totalFrases;
-        
-        let html = '';
-        if (startIndex <= endIndex) {
-            // Janela contígua normal
-            for (let i = startIndex; i <= endIndex; i++) {
-                const displayNum = i - startIndex + 1;
-                const isLast = (i === endIndex);
-                const phraseClass = isLast ? ' current-block-phrase' : '';
-                html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-            }
-        } else {
-            // Wrap-around: janela quebrada (ex: frases 4, 5, 1, 2)
-            for (let i = startIndex; i < totalFrases; i++) {
-                const displayNum = i - startIndex + 1;
-                html += `<p style="margin-bottom:0.5em;"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-            }
-            for (let i = 0; i <= endIndex; i++) {
-                const displayNum = (totalFrases - startIndex) + i + 1;
-                const isLast = (i === endIndex);
-                const phraseClass = isLast ? ' current-block-phrase' : '';
-                html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-            }
-        }
-        cardContent.innerHTML = html;
-        recitationHint.textContent = 'Recite todas as frases acima em voz alta.';
-        const displayLevel = (currentLevel % totalFrases) + 1;
-        levelIndicator.textContent = `Passo ${currentLevel+1} de ${totalSteps} (frase ${displayLevel})`;
-        contextIndicator.innerHTML = `Janela de ${N} frases · Cada frase aparece ${N} vezes`;
-        modeBadge.textContent = `Micro ${N}`;
-        const progress = ((currentLevel + 1) / totalSteps) * 100;
-        progressBarFill.style.width = `${progress}%`;
+    const N = slidingWindowSize;
+    const totalFrases = sentences.length;
+    const totalSteps = totalFrases * N; // total de passos até a conclusão
+
+    // ---- cálculo da janela ----
+    // Enquanto não atingimos N frases na janela, ela cresce: [0], [0,1], [0,1,2]...
+    // Depois desliza com tamanho fixo N, com wrap-around quando necessário.
+    let startIndex, endIndex, windowSize;
+
+    if (currentLevel < N - 1) {
+        // Fase de crescimento: janela começa em 0 e vai até currentLevel
+        startIndex = 0;
+        endIndex = currentLevel;
+        windowSize = currentLevel + 1;
+    } else {
+        // Fase de deslizamento: janela de tamanho N
+        // currentLevel rastreia a posição da ÚLTIMA frase da janela
+        const lastPhraseIndex = currentLevel % totalFrases;
+        endIndex = lastPhraseIndex;
+        startIndex = (endIndex - N + 1 + totalFrases) % totalFrases;
+        windowSize = N;
     }
+
+    // ---- montagem do HTML da janela ----
+    let html = '';
+    if (startIndex <= endIndex) {
+        // Janela contígua
+        for (let i = startIndex; i <= endIndex; i++) {
+            const displayNum = i - startIndex + 1;
+            const isLast = (i === endIndex);
+            const phraseClass = isLast ? ' current-block-phrase' : '';
+            html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+        }
+    } else {
+        // Wrap-around (ex.: frases 4, 5, 1, 2)
+        for (let i = startIndex; i < totalFrases; i++) {
+            const displayNum = i - startIndex + 1;
+            html += `<p style="margin-bottom:0.5em;"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+        }
+        for (let i = 0; i <= endIndex; i++) {
+            const displayNum = (totalFrases - startIndex) + i + 1;
+            const isLast = (i === endIndex);
+            const phraseClass = isLast ? ' current-block-phrase' : '';
+            html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
+        }
+    }
+
+    cardContent.innerHTML = html;
+    recitationHint.textContent = 'Recite todas as frases acima em voz alta.';
+
+    // ---- indicadores ----
+    const displayLevel = (currentLevel % totalFrases) + 1;
+    levelIndicator.textContent = `Passo ${currentLevel+1} de ${totalSteps} (frase ${displayLevel})`;
+    contextIndicator.innerHTML = `Janela de ${windowSize} frase${windowSize>1?'s':''} · Cada frase aparece ${N} vez${N>1?'es':''}`;
+    modeBadge.textContent = `Micro ${N}`;
+    const progress = ((currentLevel + 1) / totalSteps) * 100;
+    progressBarFill.style.width = `${progress}%`;
+}
 
     function renderCard() {
         const card = cardContent.parentElement;
