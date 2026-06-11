@@ -39,6 +39,14 @@
     const fulltextContent = document.getElementById('fulltext-content');
 
     const completeSummary = document.getElementById('complete-summary');
+    const recallRating = document.getElementById('recall-rating');
+    const recallFeedback = document.getElementById('recall-feedback');
+    const recallButtons = document.querySelectorAll('.recall-btn');
+    const reviewPanel = document.getElementById('review-panel');
+    const statDue = document.getElementById('stat-due');
+    const statStreak = document.getElementById('stat-streak');
+    const statRetention = document.getElementById('stat-retention');
+    const heatmapEl = document.getElementById('heatmap');
     const btnRestart = document.getElementById('btn-restart');
     const btnBackLibraryComplete = document.getElementById('btn-back-library-complete');
     const resumeYes = document.getElementById('resume-yes');
@@ -285,6 +293,165 @@
         updateTextInLibrary(currentTextId, { progress: null });
     }
 
+    // ========================================================================
+    // FSRS — Repetição Espaçada (Free Spaced Repetition Scheduler)
+    // ------------------------------------------------------------------------
+    // Implementação fiel-simplificada (estilo FSRS v4.5) em JS puro.
+    // Modela cada texto como um "card" com difficulty/stability/state e agenda
+    // a próxima revisão. Persistido em localStorage (chave separada), sem
+    // dependências externas e compatível com o schema existente de textos.
+    // ========================================================================
+    const FSRS_KEY = 'memorizador-fsrs';
+    // Pesos padrão publicados do FSRS-4.5
+    const FSRS_W = [0.4072, 1.1829, 3.1262, 15.4722, 7.2102, 0.5316, 1.0651,
+                    0.0234, 1.616, 0.1544, 1.0824, 1.9813, 0.0953, 0.2975,
+                    2.2042, 0.2407, 2.9466, 0.5034, 0.6567];
+    const FSRS_REQUEST_RETENTION = 0.9;
+    const FSRS_DECAY = Math.log(0.9); // ln(0.9); R = exp(DECAY * t / S)
+    const DAY_MS = 86400000;
+
+    const _clampD = d => Math.min(10, Math.max(1, d));
+    // Nota do usuário (1=Perfeitamente … 4=Não lembro) → grade FSRS (4=easy … 1=again)
+    const _ratingToGrade = r => 5 - r;
+    const _fsrsInitStability = g => Math.max(0.1, FSRS_W[g - 1]);
+    const _fsrsInitDifficulty = g => _clampD(FSRS_W[4] - Math.exp(FSRS_W[5] * (g - 1)) + 1);
+    function _fsrsRetrievability(elapsedDays, stability) {
+        if (!stability || stability <= 0) return 0;
+        return Math.exp(FSRS_DECAY * Math.max(0, elapsedDays) / stability);
+    }
+    function _fsrsNextDifficulty(D, g) {
+        const dp = D - FSRS_W[6] * (g - 3);
+        return _clampD(FSRS_W[7] * _fsrsInitDifficulty(4) + (1 - FSRS_W[7]) * dp);
+    }
+    function _fsrsNextStability(D, S, R, g) {
+        if (g === 1) { // lapse
+            return Math.max(0.1, FSRS_W[11] * Math.pow(D, -FSRS_W[12]) *
+                (Math.pow(S + 1, FSRS_W[13]) - 1) * Math.exp(FSRS_W[14] * (1 - R)));
+        }
+        const hard = g === 2 ? FSRS_W[15] : 1;
+        const easy = g === 4 ? FSRS_W[16] : 1;
+        const inc = Math.exp(FSRS_W[8]) * (11 - D) * Math.pow(S, -FSRS_W[9]) *
+            (Math.exp(FSRS_W[10] * (1 - R)) - 1) * hard * easy;
+        return Math.max(0.1, S * (1 + inc));
+    }
+    const _fsrsInterval = S => Math.max(1, Math.round(S * Math.log(FSRS_REQUEST_RETENTION) / FSRS_DECAY));
+
+    // Aplica uma revisão a um card (ou cria um novo) e devolve o card atualizado.
+    function fsrsReview(card, rating, nowMs) {
+        const g = _ratingToGrade(rating);
+        const now = nowMs || Date.now();
+        let S, D, reps, lapses, state;
+        if (!card || card.state === 'new' || !card.stability) {
+            S = _fsrsInitStability(g);
+            D = _fsrsInitDifficulty(g);
+            reps = 1;
+            lapses = g === 1 ? 1 : 0;
+            state = g === 1 ? 'learning' : 'review';
+        } else {
+            const elapsedDays = (now - (card.lastReview || now)) / DAY_MS;
+            const R = _fsrsRetrievability(elapsedDays, card.stability);
+            D = _fsrsNextDifficulty(card.difficulty, g);
+            S = _fsrsNextStability(card.difficulty, card.stability, R, g);
+            reps = (card.reps || 0) + 1;
+            lapses = (card.lapses || 0) + (g === 1 ? 1 : 0);
+            state = g === 1 ? 'relearning' : 'review';
+        }
+        const scheduledDays = _fsrsInterval(S);
+        return {
+            state, difficulty: D, stability: S, reps, lapses,
+            lastReview: now,
+            due: now + scheduledDays * DAY_MS,
+            scheduledDays
+        };
+    }
+
+    // ---------- persistência FSRS ----------
+    function loadFsrs() {
+        try {
+            const raw = localStorage.getItem(FSRS_KEY);
+            const parsed = raw ? JSON.parse(raw) : null;
+            return {
+                cards: (parsed && parsed.cards) || {},
+                log: (parsed && Array.isArray(parsed.log)) ? parsed.log : []
+            };
+        } catch {
+            return { cards: {}, log: [] };
+        }
+    }
+
+    function saveFsrs(data) {
+        try {
+            localStorage.setItem(FSRS_KEY, JSON.stringify(data));
+        } catch (e) { /* ignora quota */ }
+    }
+
+    // Registra a avaliação do usuário ao concluir uma sessão de um texto.
+    function recordReview(textId, rating) {
+        if (!textId) return null;
+        const data = loadFsrs();
+        const card = fsrsReview(data.cards[textId], rating, Date.now());
+        data.cards[textId] = card;
+        // Log de atividade (para heatmap e sequência) — uma entrada por revisão
+        const dayKey = new Date().toISOString().slice(0, 10);
+        data.log.push({ date: dayKey, rating, textId });
+        // Mantém o log enxuto (último ano)
+        const cutoff = Date.now() - 366 * DAY_MS;
+        data.log = data.log.filter(e => new Date(e.date).getTime() >= cutoff);
+        saveFsrs(data);
+        return card;
+    }
+
+    // Conjunto de IDs de textos vencidos (due <= agora).
+    function getDueTextIds() {
+        const data = loadFsrs();
+        const now = Date.now();
+        const due = new Set();
+        for (const [id, card] of Object.entries(data.cards)) {
+            if (card && card.due && card.due <= now) due.add(id);
+        }
+        return due;
+    }
+
+    // Estatísticas agregadas: vencidos hoje, sequência de dias, retenção média prevista.
+    function getFsrsStats() {
+        const data = loadFsrs();
+        const now = Date.now();
+        const cards = Object.values(data.cards);
+
+        const dueCount = cards.filter(c => c && c.due && c.due <= now).length;
+
+        // Retenção média prevista hoje (retrievability atual de cada card)
+        let retentionSum = 0, retentionN = 0;
+        for (const c of cards) {
+            if (!c || !c.stability) continue;
+            const elapsedDays = (now - (c.lastReview || now)) / DAY_MS;
+            retentionSum += _fsrsRetrievability(elapsedDays, c.stability);
+            retentionN++;
+        }
+        const retention = retentionN ? Math.round((retentionSum / retentionN) * 100) : null;
+
+        // Sequência de dias consecutivos com pelo menos uma revisão (até hoje/ontem)
+        const days = new Set(data.log.map(e => e.date));
+        let streak = 0;
+        const cursor = new Date();
+        // Se não revisou hoje, a sequência ainda pode contar a partir de ontem
+        if (!days.has(cursor.toISOString().slice(0, 10))) cursor.setDate(cursor.getDate() - 1);
+        while (days.has(cursor.toISOString().slice(0, 10))) {
+            streak++;
+            cursor.setDate(cursor.getDate() - 1);
+        }
+
+        return { dueCount, streak, retention, totalCards: cards.length };
+    }
+
+    // Conta de revisões por dia (para o heatmap), últimos `weeks` * 7 dias.
+    function getReviewCountsByDay() {
+        const data = loadFsrs();
+        const counts = {};
+        for (const e of data.log) counts[e.date] = (counts[e.date] || 0) + 1;
+        return counts;
+    }
+
     // ---------- carregamento de textos do GitHub ----------
     const GITHUB_OWNER = 'ptk3md';
     const GITHUB_REPO = 'Memorized';
@@ -389,9 +556,55 @@
         return (text || '').replace(/[&<>"']/g, m => map[m]);
     }
 
+    // ---------- painel de revisão + heatmap (FSRS) ----------
+    function renderReviewPanel() {
+        if (!reviewPanel) return;
+        const stats = getFsrsStats();
+        if (stats.totalCards === 0) {
+            reviewPanel.classList.add('hidden');
+            return;
+        }
+        reviewPanel.classList.remove('hidden');
+        statDue.textContent = stats.dueCount;
+        statDue.parentElement.classList.toggle('review-stat--alert', stats.dueCount > 0);
+        statStreak.textContent = stats.streak;
+        statRetention.textContent = stats.retention != null ? stats.retention + '%' : '—';
+        renderHeatmap();
+    }
+
+    function renderHeatmap() {
+        if (!heatmapEl) return;
+        const counts = getReviewCountsByDay();
+        const WEEKS = 17; // ~4 meses
+        const today = new Date();
+        // Recua até o domingo da semana atual para alinhar as colunas
+        const end = new Date(today);
+        end.setDate(end.getDate() + (6 - end.getDay()));
+        const totalDays = WEEKS * 7;
+        let html = '';
+        for (let i = totalDays - 1; i >= 0; i--) {
+            const d = new Date(end);
+            d.setDate(d.getDate() - i);
+            const key = d.toISOString().slice(0, 10);
+            const future = d.getTime() > today.getTime();
+            const n = counts[key] || 0;
+            let level = 0;
+            if (n >= 1) level = 1;
+            if (n >= 3) level = 2;
+            if (n >= 6) level = 3;
+            if (n >= 10) level = 4;
+            const cls = future ? 'heatmap__cell heatmap__cell--future' : `heatmap__cell heatmap__cell--l${level}`;
+            const title = future ? '' : `${key}: ${n} revisão${n !== 1 ? 'ões' : ''}`;
+            html += `<span class="${cls}" title="${title}"></span>`;
+        }
+        heatmapEl.innerHTML = html;
+    }
+
     // ---------- renderização da biblioteca ----------
     async function renderLibrary() {
         const texts = await loadAllTexts();
+        const dueIds = getDueTextIds();
+        renderReviewPanel();
         textList.innerHTML = '';
         if (texts.length === 0) {
             emptyLibrary.classList.remove('hidden');
@@ -418,6 +631,7 @@
                     <div class="lib-card__header">
                         <span class="lib-card__title">${escapeHtml(text.title)}</span>
                         <div style="display:flex; align-items:center; gap:8px;">
+                            ${dueIds.has(text.id) ? `<span class="lib-card__due"><i data-lucide="bell" class="w-3 h-3"></i>Revisar</span>` : ''}
                             <span class="lib-card__source ${sourceClass}">
                                 <i data-lucide="${sourceIcon}" class="w-3 h-3"></i>${sourceText}
                             </span>
@@ -764,55 +978,64 @@
         progressBarFill.style.width = `${progress}%`;
     }
 
+    // Constrói a sequência de passos do modo Micro Escadas (janela deslizante).
+    // Cada passo é uma janela contígua [start, end] (índices inclusivos):
+    //   Fase 1 — Aquecimento: 1, 12, 123, ... até atingir S frases (ou N, se N<S)
+    //   Fase 2 — Janela deslizante: janela de tamanho S desliza frase a frase até o fim
+    //   Fase 3 — Síntese final: texto completo (0..N-1)
+    // Passos consecutivos idênticos são removidos (ocorre quando N <= S).
+    function buildSlidingSteps(windowSize, total) {
+        const S = Math.max(1, windowSize);
+        const N = total;
+        const steps = [];
+        const pushStep = (start, end) => {
+            if (start < 0 || end > N - 1 || start > end) return;
+            const last = steps[steps.length - 1];
+            if (last && last.start === start && last.end === end) return; // evita repetição consecutiva
+            steps.push({ start, end });
+        };
+        // Fase 1 — Aquecimento (ramp-up)
+        const rampMax = Math.min(S, N);
+        for (let k = 1; k <= rampMax; k++) pushStep(0, k - 1);
+        // Fase 2 — Janela deslizante (tamanho S, terminando na última frase)
+        for (let start = 1; start + S - 1 <= N - 1; start++) pushStep(start, start + S - 1);
+        // Fase 3 — Síntese final (texto completo)
+        pushStep(0, N - 1);
+        return steps;
+    }
+
     function renderSlidingMode() {
         const N = slidingWindowSize;
         const totalFrases = sentences.length;
-        const totalSteps = totalFrases * N;
+        const steps = buildSlidingSteps(N, totalFrases);
+        const totalSteps = steps.length;
 
-        let startIndex, endIndex, windowSize;
+        // Mantém currentLevel dentro do intervalo válido (protege progresso salvo antigo)
+        if (currentLevel > totalSteps - 1) currentLevel = totalSteps - 1;
+        if (currentLevel < 0) currentLevel = 0;
 
-        if (currentLevel < N - 1) {
-            // Fase de crescimento: janela começa em 0 e vai até currentLevel
-            startIndex = 0;
-            endIndex = currentLevel;
-            windowSize = currentLevel + 1;
-        } else {
-            // Fase de deslizamento: janela de tamanho N
-            const lastPhraseIndex = currentLevel % totalFrases;
-            endIndex = lastPhraseIndex;
-            startIndex = (endIndex - N + 1 + totalFrases) % totalFrases;
-            windowSize = N;
-        }
+        const step = steps[currentLevel];
+        const windowSize = step.end - step.start + 1;
+        const isFinal = (currentLevel === totalSteps - 1) &&
+                        step.start === 0 && step.end === totalFrases - 1 && totalFrases > 1;
 
         let html = '';
-        if (startIndex <= endIndex) {
-            // Janela contígua
-            for (let i = startIndex; i <= endIndex; i++) {
-                const displayNum = i - startIndex + 1;
-                const isLast = (i === endIndex);
-                const phraseClass = isLast ? ' current-block-phrase' : '';
-                html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-            }
-        } else {
-            // Wrap-around
-            for (let i = startIndex; i < totalFrases; i++) {
-                const displayNum = i - startIndex + 1;
-                html += `<p style="margin-bottom:0.5em;"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-            }
-            for (let i = 0; i <= endIndex; i++) {
-                const displayNum = (totalFrases - startIndex) + i + 1;
-                const isLast = (i === endIndex);
-                const phraseClass = isLast ? ' current-block-phrase' : '';
-                html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-            }
+        for (let i = step.start; i <= step.end; i++) {
+            const displayNum = i - step.start + 1;
+            const isLast = (i === step.end);
+            const phraseClass = isLast ? ' current-block-phrase' : '';
+            html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
         }
 
         cardContent.innerHTML = html;
-        recitationHint.textContent = 'Recite todas as frases acima em voz alta.';
+        recitationHint.textContent = isFinal
+            ? 'Texto completo! Recite tudo em voz alta.'
+            : 'Recite todas as frases acima em voz alta.';
 
-        const displayLevel = (currentLevel % totalFrases) + 1;
-        levelIndicator.textContent = `Passo ${currentLevel+1} de ${totalSteps} (frase ${displayLevel})`;
-        contextIndicator.innerHTML = `Janela de ${windowSize} frase${windowSize>1?'s':''} · Cada frase aparece ${N} vez${N>1?'es':''}`;
+        levelIndicator.textContent = `Passo ${currentLevel+1} de ${totalSteps}`;
+        contextIndicator.innerHTML = isFinal
+            ? `Síntese final · texto completo (${totalFrases} frases)`
+            : `Janela de ${windowSize} frase${windowSize>1?'s':''} · frases ${step.start+1}–${step.end+1}`;
         modeBadge.textContent = `Micro ${N}`;
         const progress = ((currentLevel + 1) / totalSteps) * 100;
         progressBarFill.style.width = `${progress}%`;
@@ -871,16 +1094,11 @@
                 }
             }
         } else if (method === 'sliding') {
-            const N = slidingWindowSize;
-            const totalSteps = sentences.length * N;
+            const totalSteps = buildSlidingSteps(slidingWindowSize, sentences.length).length;
             if (currentLevel < totalSteps - 1) {
                 currentLevel++;
                 saveProgressForCurrentText();
                 renderCard();
-                if ((currentLevel + 1) % sentences.length === 0) {
-                    const ciclo = Math.floor((currentLevel + 1) / sentences.length);
-                    showToast(`Ciclo ${ciclo} de ${N} concluído!`, 'info');
-                }
             } else {
                 clearProgressForCurrentText();
                 showCompleteScreen();
@@ -918,9 +1136,48 @@
     function showCompleteScreen() {
         showScreen(screenComplete);
         completeSummary.innerHTML = sentences.map((s, i) => `<p>${i+1}. ${s}</p>`).join('');
+        resetRecallRating();
         spawnConfetti();
         lucide.createIcons();
     }
+
+    // ---------- avaliação de recordação (FSRS) na conclusão ----------
+    function resetRecallRating() {
+        if (!recallRating) return;
+        recallFeedback.textContent = '';
+        recallFeedback.classList.remove('visible');
+        recallButtons.forEach(b => {
+            b.disabled = false;
+            b.classList.remove('chosen');
+        });
+        recallRating.classList.toggle('hidden', !currentTextId);
+    }
+
+    function describeNextReview(scheduledDays) {
+        if (scheduledDays <= 0) return 'hoje mesmo';
+        if (scheduledDays === 1) return 'amanhã';
+        if (scheduledDays < 30) return `em ${scheduledDays} dias`;
+        if (scheduledDays < 365) {
+            const m = Math.round(scheduledDays / 30);
+            return `em ${m} ${m === 1 ? 'mês' : 'meses'}`;
+        }
+        const y = (scheduledDays / 365).toFixed(1).replace('.0', '');
+        return `em ${y} ${y === '1' ? 'ano' : 'anos'}`;
+    }
+
+    recallButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (!currentTextId || btn.disabled) return;
+            const rating = parseInt(btn.dataset.rating, 10);
+            const card = recordReview(currentTextId, rating);
+            recallButtons.forEach(b => { b.disabled = true; });
+            btn.classList.add('chosen');
+            if (card) {
+                recallFeedback.textContent = `Próxima revisão ${describeNextReview(card.scheduledDays)}.`;
+                recallFeedback.classList.add('visible');
+            }
+        });
+    });
 
     function resetTrainingState() {
         currentLevel = 0;

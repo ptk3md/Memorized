@@ -30,6 +30,26 @@
                 <i data-lucide="plus" class="w-4 h-4"></i> Novo texto
             </button>
         </div>
+        <!-- ===== PAINEL DE REVISÃO / ESTATÍSTICAS (FSRS) ===== -->
+        <div id="review-panel" class="review-panel hidden">
+            <div class="review-panel__stats">
+                <div class="review-stat">
+                    <span class="review-stat__value" id="stat-due">0</span>
+                    <span class="review-stat__label">para revisar hoje</span>
+                </div>
+                <div class="review-stat">
+                    <span class="review-stat__value" id="stat-streak">0</span>
+                    <span class="review-stat__label">dias de sequência</span>
+                </div>
+                <div class="review-stat">
+                    <span class="review-stat__value" id="stat-retention">—</span>
+                    <span class="review-stat__label">retenção prevista</span>
+                </div>
+            </div>
+            <div class="review-panel__heatmap" aria-hidden="true">
+                <div id="heatmap" class="heatmap" title="Atividade de revisão"></div>
+            </div>
+        </div>
         <div id="text-list" class="flex-1 overflow-y-auto space-y-3 hidden">
             <!-- Itens da biblioteca são inseridos aqui dinamicamente -->
         </div>
@@ -123,7 +143,7 @@
                                     <i data-lucide="check" class="w-3 h-3"></i>
                                 </span>
                             </div>
-                            <p class="text-xs mt-1" style="color:var(--text-fg-faint);">Janela deslizante configurável. Cada frase aparece exatamente o número de vezes que você escolher.</p>
+                            <p class="text-xs mt-1" style="color:var(--text-fg-faint);">Janela deslizante configurável: aquece de 1 frase até o tamanho escolhido, desliza até o fim e fecha com o texto completo.</p>
                             <span class="method-option__badge method-badge--sliding">Recomendado para textos longos</span>
                         </div>
                     </div>
@@ -132,17 +152,17 @@
                 <!-- ========== SELETOR DE TAMANHO DA JANELA (MICRO ESCADAS) ========== -->
                 <div id="sliding-window-selector" class="hidden" style="padding: 12px 16px; border: 1px solid #2e2e2e; border-radius: 8px; background: #1a1a1a; margin-top: 4px;">
                     <p class="text-xs font-bold uppercase tracking-wider mb-3" style="color: var(--text-fg-faint);">
-                        <i data-lucide="sliders-horizontal" class="w-3 h-3 inline mr-1"></i> Repetições por frase
+                        <i data-lucide="sliders-horizontal" class="w-3 h-3 inline mr-1"></i> Tamanho da janela
                     </p>
                     <div class="flex gap-2" id="window-size-options">
-                        <button class="window-size-btn" data-size="2" aria-label="2 repetições">2</button>
-                        <button class="window-size-btn" data-size="3" aria-label="3 repetições">3</button>
-                        <button class="window-size-btn selected" data-size="4" aria-label="4 repetições">4</button>
-                        <button class="window-size-btn" data-size="5" aria-label="5 repetições">5</button>
-                        <button class="window-size-btn" data-size="6" aria-label="6 repetições">6</button>
+                        <button class="window-size-btn" data-size="2" aria-label="Janela de 2 frases">2</button>
+                        <button class="window-size-btn" data-size="3" aria-label="Janela de 3 frases">3</button>
+                        <button class="window-size-btn selected" data-size="4" aria-label="Janela de 4 frases">4</button>
+                        <button class="window-size-btn" data-size="5" aria-label="Janela de 5 frases">5</button>
+                        <button class="window-size-btn" data-size="6" aria-label="Janela de 6 frases">6</button>
                     </div>
                     <p class="text-xs mt-2" style="color: var(--text-fg-faint);">
-                        Cada frase será exibida exatamente este número de vezes ao longo do treino.
+                        Número máximo de frases visíveis por vez na janela deslizante.
                     </p>
                 </div>
             </div>
@@ -208,6 +228,26 @@
                 Você percorreu todas as frases com sucesso. O texto completo foi internalizado.
             </p>
             <div id="complete-summary" class="text-xs max-w-md mt-2 p-3 rounded border w-full" style="border-color:#333; background:#1e1e1e; color:var(--text-fg-faint);"></div>
+
+            <!-- ===== AVALIAÇÃO DE RECORDAÇÃO (FSRS) ===== -->
+            <div id="recall-rating" class="recall-rating w-full max-w-md mt-2">
+                <p class="recall-rating__q text-xs font-bold uppercase tracking-wider">O quanto você se lembra?</p>
+                <div class="recall-rating__btns" role="group" aria-label="Avaliação de recordação">
+                    <button class="recall-btn recall-btn--1" data-rating="1" aria-label="Perfeitamente">
+                        <span class="recall-btn__emoji" aria-hidden="true">🤩</span><span class="recall-btn__label">Perfeito</span>
+                    </button>
+                    <button class="recall-btn recall-btn--2" data-rating="2" aria-label="Lembrei bem">
+                        <span class="recall-btn__emoji" aria-hidden="true">🙂</span><span class="recall-btn__label">Bem</span>
+                    </button>
+                    <button class="recall-btn recall-btn--3" data-rating="3" aria-label="Com dificuldade">
+                        <span class="recall-btn__emoji" aria-hidden="true">😬</span><span class="recall-btn__label">Difícil</span>
+                    </button>
+                    <button class="recall-btn recall-btn--4" data-rating="4" aria-label="Não lembro">
+                        <span class="recall-btn__emoji" aria-hidden="true">😵</span><span class="recall-btn__label">Esqueci</span>
+                    </button>
+                </div>
+                <p id="recall-feedback" class="recall-rating__feedback text-xs" aria-live="polite"></p>
+            </div>
         </div>
         <div class="flex gap-3 pt-4">
             <button id="btn-back-library-complete" class="flex-1 h-14 btn-claude-secondary font-bold uppercase tracking-widest text-xs rounded-lg flex items-center justify-center gap-2" aria-label="Voltar para biblioteca">

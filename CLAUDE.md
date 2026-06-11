@@ -11,7 +11,7 @@ Contexto permanente para sessões do Claude Code neste projeto.
 **Três modos de treino:**
 - **Bloco Simultâneo** — exibe todas as frases de 0 até `currentLevel` de uma vez
 - **Serial Acumulativo** — exibe uma frase por vez, avança dentro do nível antes de subir
-- **Micro Escadas (Janela Deslizante)** — janela deslizante de até 4 frases (`WINDOW_SIZE = 4`)
+- **Micro Escadas (Janela Deslizante)** — tamanho de janela `S` configurável (2–6, padrão 4 via `slidingWindowSize`). Sequência: **aquecimento** (1, 12, 123… até `S`) → **deslizamento** (janela de `S` frases desliza até o fim) → **síntese final** (texto completo). Passos construídos por `buildSlidingSteps(S, N)`; sem repetição consecutiva de janelas.
 
 **Stack:** HTML/CSS/JS puros, sem build step, sem framework.  
 **Dependências (CDN apenas):** Tailwind CSS, Lucide Icons, Atkinson Hyperlegible (Google Fonts).  
@@ -96,7 +96,7 @@ parseSentences(text)          — parse inteligente de frases (parágrafos → p
 formatAnkiMarkup(raw)         — converte sintaxe Anki em HTML (frações, superscript, setas, etc.)
 renderBlockMode()             — exibe frases 0..currentLevel, destaque na última
 renderSerialMode()            — exibe uma frase com indicadores ✓/▶
-renderSlidingMode()           — janela de 4 frases (WINDOW_SIZE=4)
+renderSlidingMode()           — janela deslizante de tamanho S (via buildSlidingSteps): aquecimento → deslize → síntese
 handleNext()                  — avança nível/frase conforme o modo
 handlePrev()                  — retrocede
 ```
@@ -169,6 +169,32 @@ clearProgressForCurrentText()
 - A porcentagem numérica (`#progress-pct`) foi removida; resta apenas a barra de progresso (`#progress-bar-fill`) + `#mode-badge`.
 - Avisos popup (`showToast`) foram removidos da interface — a função existe como no-op para não quebrar chamadas existentes.
 - **Micro Escadas (`data-mode="sliding"`):** fonte um pouco menor (`clamp(0.85rem, 3.2vw, 1.2rem)`) e `max-height` maior (`calc(100vh - 230px)`, `calc(100vh - 150px)` no modo Zen), aproveitando o espaço liberado pela navbar oculta. Sem `display:contents`/`overflow:hidden` forçados — o scroll do cartão (`overflow-y:auto`) cobre o excesso sem cortar texto.
+
+### Repetição Espaçada (FSRS)
+
+Camada de revisão espaçada em **JS puro** (sem dependências, sem build), persistida em chave própria.
+
+**Chave:** `memorizador-fsrs` — **independente** de `memorizador-texts` e `memorizador-settings`.
+
+```js
+{
+  cards: {                       // por id de texto (locais E do GitHub)
+    [textId]: {
+      state, difficulty, stability, reps, lapses,
+      lastReview,  // ms epoch
+      due,         // ms epoch da próxima revisão
+      scheduledDays
+    }
+  },
+  log: [ { date: 'YYYY-MM-DD', rating, textId } ]   // para heatmap/sequência (1 ano)
+}
+```
+
+- **Engine:** implementação fiel-simplificada do FSRS v4.5 (`FSRS_W` = pesos padrão publicados). Funções puras: `fsrsReview(card, rating, now)`, `_fsrsRetrievability`, `_fsrsNextStability`, `_fsrsNextDifficulty`, `_fsrsInterval`. `R = exp(ln(0.9)·t/S)`, retenção-alvo 0.9.
+- **Nota do usuário:** `1=Perfeitamente … 4=Não lembro` (convertida internamente para grade FSRS `4..1` via `_ratingToGrade`).
+- **Fluxo:** ao concluir uma sessão (`showCompleteScreen`), aparece o bloco `#recall-rating` (4 botões). O clique chama `recordReview(textId, rating)`, que atualiza o card e mostra "Próxima revisão em X dias". `resetRecallRating()` prepara o bloco a cada conclusão.
+- **Biblioteca:** `#review-panel` mostra vencidos hoje (`#stat-due`), sequência (`#stat-streak`) e retenção prevista (`#stat-retention`), além de um heatmap estilo GitHub (`#heatmap`). Cards vencidos ganham o badge `.lib-card__due`. Funções: `getDueTextIds()`, `getFsrsStats()`, `getReviewCountsByDay()`, `renderReviewPanel()`, `renderHeatmap()`.
+- O painel só aparece quando há ≥1 card (após a primeira avaliação). Textos do GitHub também acumulam memória FSRS (a restrição é só de editar/apagar).
 
 ### Textos Compartilhados (GitHub)
 
