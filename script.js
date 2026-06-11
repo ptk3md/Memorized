@@ -764,55 +764,64 @@
         progressBarFill.style.width = `${progress}%`;
     }
 
+    // Constrói a sequência de passos do modo Micro Escadas (janela deslizante).
+    // Cada passo é uma janela contígua [start, end] (índices inclusivos):
+    //   Fase 1 — Aquecimento: 1, 12, 123, ... até atingir S frases (ou N, se N<S)
+    //   Fase 2 — Janela deslizante: janela de tamanho S desliza frase a frase até o fim
+    //   Fase 3 — Síntese final: texto completo (0..N-1)
+    // Passos consecutivos idênticos são removidos (ocorre quando N <= S).
+    function buildSlidingSteps(windowSize, total) {
+        const S = Math.max(1, windowSize);
+        const N = total;
+        const steps = [];
+        const pushStep = (start, end) => {
+            if (start < 0 || end > N - 1 || start > end) return;
+            const last = steps[steps.length - 1];
+            if (last && last.start === start && last.end === end) return; // evita repetição consecutiva
+            steps.push({ start, end });
+        };
+        // Fase 1 — Aquecimento (ramp-up)
+        const rampMax = Math.min(S, N);
+        for (let k = 1; k <= rampMax; k++) pushStep(0, k - 1);
+        // Fase 2 — Janela deslizante (tamanho S, terminando na última frase)
+        for (let start = 1; start + S - 1 <= N - 1; start++) pushStep(start, start + S - 1);
+        // Fase 3 — Síntese final (texto completo)
+        pushStep(0, N - 1);
+        return steps;
+    }
+
     function renderSlidingMode() {
         const N = slidingWindowSize;
         const totalFrases = sentences.length;
-        const totalSteps = totalFrases * N;
+        const steps = buildSlidingSteps(N, totalFrases);
+        const totalSteps = steps.length;
 
-        let startIndex, endIndex, windowSize;
+        // Mantém currentLevel dentro do intervalo válido (protege progresso salvo antigo)
+        if (currentLevel > totalSteps - 1) currentLevel = totalSteps - 1;
+        if (currentLevel < 0) currentLevel = 0;
 
-        if (currentLevel < N - 1) {
-            // Fase de crescimento: janela começa em 0 e vai até currentLevel
-            startIndex = 0;
-            endIndex = currentLevel;
-            windowSize = currentLevel + 1;
-        } else {
-            // Fase de deslizamento: janela de tamanho N
-            const lastPhraseIndex = currentLevel % totalFrases;
-            endIndex = lastPhraseIndex;
-            startIndex = (endIndex - N + 1 + totalFrases) % totalFrases;
-            windowSize = N;
-        }
+        const step = steps[currentLevel];
+        const windowSize = step.end - step.start + 1;
+        const isFinal = (currentLevel === totalSteps - 1) &&
+                        step.start === 0 && step.end === totalFrases - 1 && totalFrases > 1;
 
         let html = '';
-        if (startIndex <= endIndex) {
-            // Janela contígua
-            for (let i = startIndex; i <= endIndex; i++) {
-                const displayNum = i - startIndex + 1;
-                const isLast = (i === endIndex);
-                const phraseClass = isLast ? ' current-block-phrase' : '';
-                html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-            }
-        } else {
-            // Wrap-around
-            for (let i = startIndex; i < totalFrases; i++) {
-                const displayNum = i - startIndex + 1;
-                html += `<p style="margin-bottom:0.5em;"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-            }
-            for (let i = 0; i <= endIndex; i++) {
-                const displayNum = (totalFrases - startIndex) + i + 1;
-                const isLast = (i === endIndex);
-                const phraseClass = isLast ? ' current-block-phrase' : '';
-                html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
-            }
+        for (let i = step.start; i <= step.end; i++) {
+            const displayNum = i - step.start + 1;
+            const isLast = (i === step.end);
+            const phraseClass = isLast ? ' current-block-phrase' : '';
+            html += `<p style="margin-bottom:0.5em;" class="${phraseClass}"><span style="color:var(--accent);">${displayNum}.</span> ${formatAnkiMarkup(sentences[i])}</p>`;
         }
 
         cardContent.innerHTML = html;
-        recitationHint.textContent = 'Recite todas as frases acima em voz alta.';
+        recitationHint.textContent = isFinal
+            ? 'Texto completo! Recite tudo em voz alta.'
+            : 'Recite todas as frases acima em voz alta.';
 
-        const displayLevel = (currentLevel % totalFrases) + 1;
-        levelIndicator.textContent = `Passo ${currentLevel+1} de ${totalSteps} (frase ${displayLevel})`;
-        contextIndicator.innerHTML = `Janela de ${windowSize} frase${windowSize>1?'s':''} · Cada frase aparece ${N} vez${N>1?'es':''}`;
+        levelIndicator.textContent = `Passo ${currentLevel+1} de ${totalSteps}`;
+        contextIndicator.innerHTML = isFinal
+            ? `Síntese final · texto completo (${totalFrases} frases)`
+            : `Janela de ${windowSize} frase${windowSize>1?'s':''} · frases ${step.start+1}–${step.end+1}`;
         modeBadge.textContent = `Micro ${N}`;
         const progress = ((currentLevel + 1) / totalSteps) * 100;
         progressBarFill.style.width = `${progress}%`;
@@ -871,16 +880,11 @@
                 }
             }
         } else if (method === 'sliding') {
-            const N = slidingWindowSize;
-            const totalSteps = sentences.length * N;
+            const totalSteps = buildSlidingSteps(slidingWindowSize, sentences.length).length;
             if (currentLevel < totalSteps - 1) {
                 currentLevel++;
                 saveProgressForCurrentText();
                 renderCard();
-                if ((currentLevel + 1) % sentences.length === 0) {
-                    const ciclo = Math.floor((currentLevel + 1) / sentences.length);
-                    showToast(`Ciclo ${ciclo} de ${N} concluído!`, 'info');
-                }
             } else {
                 clearProgressForCurrentText();
                 showCompleteScreen();
