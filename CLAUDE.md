@@ -238,11 +238,19 @@ Regra: hífens (`-`) e underscores (`_`) são convertidos para espaços, e a pri
 3. Faça commit e push para `main`
 4. Recarregue o app (Ctrl+R ou F5) — o novo texto aparecerá na biblioteca
 
+#### Cache (rate limit do GitHub)
+
+A API não-autenticada do GitHub limita a **60 requisições/hora por IP** — sem cache persistido, esse limite se esgota rapidamente (especialmente em IPs compartilhados) e a pasta `texts/` "some" a cada reload.
+
+- **Cache em memória:** `_githubTextsCache`/`_githubTextsCacheTime`, TTL de 5 min — evita refetch durante a mesma sessão (ex.: múltiplas chamadas a `renderLibrary()`).
+- **Cache persistido:** `localStorage['memorizador-github-cache']` (`{ texts, time }`), TTL de 30 min — sobrevive a reloads. Se ainda válido, é usado **sem** chamar a API.
+- **Fallback em rate limit (403) ou erro de rede:** `loadGitHubTexts()` retorna o cache persistido (mesmo expirado) ou o cache em memória; só retorna `[]` se nunca houve um carregamento bem-sucedido.
+
 #### Fallback (sem conexão)
 
-Se o GitHub não estiver acessível ou houver erro de conexão:
-- `loadGitHubTexts()` retorna array vazio (silenciosamente)
-- `loadAllTexts()` faz merge apenas com textos locais
+Se o GitHub não estiver acessível, sem cache disponível, e houver erro de conexão:
+- `loadGitHubTexts()` retorna array vazio (silenciosamente, com `console.warn`/`console.error`)
+- `loadAllTexts()` **sempre** retorna os textos locais — o merge com o GitHub é isolado em try/catch próprio e nunca descarta `loadLocalTexts()`
 - App continua funcionável com biblioteca local
 
 ---

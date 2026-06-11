@@ -225,25 +225,28 @@
     }
 
     async function loadAllTexts() {
+        // Textos locais são a fonte de verdade e nunca devem ser perdidos,
+        // mesmo que o carregamento dos textos do GitHub falhe por qualquer motivo.
+        const localTexts = loadLocalTexts();
+
+        let githubTexts = [];
         try {
-            // Carregar textos locais
-            const localTexts = loadLocalTexts();
-
-            // Carregar textos do GitHub
-            const githubTexts = await loadGitHubTexts();
-
-            // Merge: evitar duplicatas por ID
-            const allTexts = [...localTexts];
-            for (const ghText of githubTexts) {
-                if (!allTexts.find(t => t.id === ghText.id)) {
-                    allTexts.push(ghText);
-                }
-            }
-
-            return allTexts;
-        } catch {
-            return [];
+            githubTexts = await loadGitHubTexts();
+            if (!Array.isArray(githubTexts)) githubTexts = [];
+        } catch (error) {
+            console.error('Erro ao mesclar textos do GitHub:', error);
+            githubTexts = [];
         }
+
+        // Merge: evitar duplicatas por ID
+        const allTexts = [...localTexts];
+        for (const ghText of githubTexts) {
+            if (!allTexts.find(t => t.id === ghText.id)) {
+                allTexts.push(ghText);
+            }
+        }
+
+        return allTexts;
     }
 
     function saveAllTexts(texts) {
@@ -458,20 +461,55 @@
     const GITHUB_BRANCH = 'main';
     const TEXTS_FOLDER = 'texts';
 
+    // Cache em memória (evita refetch durante a mesma sessão) e cache
+    // persistido em localStorage (sobrevive a reloads). A API não-autenticada
+    // do GitHub limita a 60 req/hora por IP — sem cache persistido, esse
+    // limite se esgota rapidamente e a pasta texts/ "desaparece" a cada reload.
     let _githubTextsCache = null;
     let _githubTextsCacheTime = 0;
-    const GITHUB_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+    const GITHUB_CACHE_TTL = 5 * 60 * 1000; // 5 minutos (memória)
+    const GITHUB_PERSIST_KEY = 'memorizador-github-cache';
+    const GITHUB_PERSIST_TTL = 30 * 60 * 1000; // 30 minutos (localStorage)
+
+    function loadPersistedGithubTexts() {
+        try {
+            const raw = localStorage.getItem(GITHUB_PERSIST_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || !Array.isArray(parsed.texts)) return null;
+            return parsed;
+        } catch {
+            return null;
+        }
+    }
+
+    function savePersistedGithubTexts(texts) {
+        try {
+            localStorage.setItem(GITHUB_PERSIST_KEY, JSON.stringify({ texts, time: Date.now() }));
+        } catch (e) { /* ignora quota */ }
+    }
 
     async function loadGitHubTexts() {
         if (_githubTextsCache && (Date.now() - _githubTextsCacheTime) < GITHUB_CACHE_TTL) {
             return _githubTextsCache;
+        }
+        const persisted = loadPersistedGithubTexts();
+        if (persisted && (Date.now() - persisted.time) < GITHUB_PERSIST_TTL) {
+            _githubTextsCache = persisted.texts;
+            _githubTextsCacheTime = persisted.time;
+            return persisted.texts;
         }
         try {
             // Listar arquivos na pasta /texts via GitHub API
             const listUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${TEXTS_FOLDER}?ref=${GITHUB_BRANCH}`;
             const listResponse = await fetch(listUrl);
 
-            if (!listResponse.ok) return _githubTextsCache || [];
+            if (!listResponse.ok) {
+                // Rate limit (403) ou outro erro: usa o último cache bem-sucedido,
+                // mesmo expirado, em vez de deixar a pasta texts/ vazia.
+                console.warn('Não foi possível listar textos do GitHub (status ' + listResponse.status + ').');
+                return (persisted && persisted.texts) || _githubTextsCache || [];
+            }
 
             const items = await listResponse.json();
             const txtFiles = items.filter(item => item.name.endsWith('.txt') && item.type === 'file');
@@ -506,10 +544,11 @@
 
             _githubTextsCache = texts;
             _githubTextsCacheTime = Date.now();
+            savePersistedGithubTexts(texts);
             return texts;
         } catch (error) {
             console.error('Erro carregando textos do GitHub:', error);
-            return _githubTextsCache || [];
+            return (persisted && persisted.texts) || _githubTextsCache || [];
         }
     }
 
